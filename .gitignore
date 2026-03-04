@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Виртуальное окружение
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Данные (хранятся в DVC)
+data/
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.jpg
+*.jpeg
+*.png
+
+# Модели и артефакты
+*.pt
+*.pth
+*.onnx
+*.tflite
+runs/
+outputs/
+checkpoints/
+
+# Логирование
+wandb/
+mlruns/
+
+# Системные
+.DS_Store
+Thumbs.db
+
+# Секреты
+.env
+
+# Jupyter
+.ipynb_checkpoints/
