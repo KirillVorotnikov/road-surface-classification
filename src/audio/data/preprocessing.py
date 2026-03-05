@@ -1,7 +1,8 @@
 import os
 import numpy as np
 import librosa
-from typing import Optional, Tuple, Union
+import torch
+from typing import Union
 
 
 class AudioPreprocessor:
@@ -71,7 +72,7 @@ class AudioPreprocessor:
                 sr=self.target_sample_rate,
                 n_mfcc=self.n_mfcc,
                 n_mels=self.n_mels,
-                fftsize=self.n_ffts,
+                n_fft=self.n_ffts,
                 hop_length=self.hop_length,
             )
         else:
@@ -84,7 +85,7 @@ class AudioPreprocessor:
                 hop_length=self.hop_length,
             )
             # Конвертация в децибелы (логарифмическая шкала)
-            features = librosa.power_to_db(mel_spec, ref=np.max)
+            features = librosa.power_to_db(mel_spec, ref=1.0)
 
         return features
 
@@ -101,7 +102,7 @@ class AudioPreprocessor:
 
         return (features - mean) / std
 
-    def process(self, file_path: str) -> np.ndarray:
+    def process(self, file_path: str) -> torch.Tensor:
         """
         Полный пайплайн обработки одного файла
         """
@@ -117,8 +118,8 @@ class AudioPreprocessor:
         # 4. Нормализация
         features = self.normalize(features)
 
-        return features
+        return torch.from_numpy(features).float()
 
-    def __call__(self, file_path: str) -> np.ndarray:
-        """Вызов как функции"""
+    def __call__(self, file_path: str) -> torch.Tensor:
+        """Вызов как функция"""
         return self.process(file_path)
