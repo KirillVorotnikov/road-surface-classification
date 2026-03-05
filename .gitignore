@@ -17,15 +17,21 @@ env/
 *.swp
 *.swo
 
-# Данные (хранятся в DVC)
-data/
-*.wav
-*.mp3
-*.mp4
-*.avi
-*.jpg
-*.jpeg
-*.png
+# Данные (хранятся в DVC) — игнорируем только файлы форматов внутри data/
+data/*.wav
+data/*.mp3
+data/*.mp4
+data/*.avi
+data/*.jpg
+data/*.jpeg
+data/*.png
+data/**/*.wav
+data/**/*.mp3
+data/**/*.mp4
+data/**/*.avi
+data/**/*.jpg
+data/**/*.jpeg
+data/**/*.png
 
 # Модели и артефакты
 *.pt
