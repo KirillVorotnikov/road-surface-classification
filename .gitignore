@@ -17,6 +17,11 @@ env/
 *.swp
 *.swo
 
+# DVC
+.dvc/cache
+.dvc/lock
+.dvc/tmp/
+
 # Данные (хранятся в DVC) — игнорируем только файлы форматов внутри data/
 data/*.wav
 data/*.mp3
@@ -55,3 +60,6 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Qwen context
+QWEN.md

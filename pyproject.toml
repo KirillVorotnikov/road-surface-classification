@@ -45,6 +45,11 @@ dev = [
     "seaborn>=0.12",
 ]
 
+dvc = [
+    "dvc>=3.60",
+    "dvc-s3>=3.0",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"
