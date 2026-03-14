@@ -1,4 +1,4 @@
-.PHONY: setup setup-dvc train-audio train-video test lint format clean dvc-init dvc-push dvc-pull dvc-status
+.PHONY: setup setup-dvc setup-kaggle train-audio train-video test lint format clean dvc-init dvc-push dvc-pull dvc-status kaggle-push notebook notebook-lab
 
 # ── Установка ──
 setup:
@@ -7,6 +7,9 @@ setup:
 
 setup-dvc:
 	pip install -e ".[dev,dvc]"
+
+setup-kaggle:
+	pip install -e ".[kaggle]"
 
 # ── DVC ──
 dvc-init:
@@ -62,3 +65,18 @@ format:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	rm -rf .pytest_cache htmlcov .ruff_cache
+
+# ── Kaggle ──
+kaggle-push:
+	python scripts/sync_kaggle_kernel.py $(NOTEBOOK) \
+		$(if $(TITLE),--title "$(TITLE)",) \
+		$(if $(WAIT),--wait,) \
+		$(if $(GPU),,$(if $(filter $(GPU),0 false),--no-gpu,)) \
+		$(if $(INTERNET),,$(if $(filter $(INTERNET),0 false),--no-internet,))
+
+# ── Notebooks ──
+notebook:
+	jupyter notebook notebooks/
+
+notebook-lab:
+	jupyter lab notebooks/
