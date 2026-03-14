@@ -65,9 +65,10 @@ class DualLogger:
         if self.log_to_wandb and not wandb.run:
             config = {
                 "project": self.project,
-                "name": self.experiment_name,
                 **self.wandb_config,
             }
+            if self.experiment_name:
+                config["name"] = self.experiment_name
             self._wandb_run = wandb.init(**config)
 
         # MLflow run should be started externally via mlflow_config

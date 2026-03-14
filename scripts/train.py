@@ -259,7 +259,7 @@ def main(cfg: DictConfig) -> None:
 
         # Start MLflow run
         if cfg.mlflow.enabled:
-            with mlflow.start_run(run_name=cfg.experiment_name):
+            with mlflow.start_run(run_name=cfg.experiment_name, nested=True):
                 # Training loop
                 best_val_loss = float("inf")
                 patience_counter = 0
