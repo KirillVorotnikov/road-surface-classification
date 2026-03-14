@@ -57,6 +57,7 @@ Thumbs.db
 
 # Секреты
 .env
+.env.local
 
 # Jupyter
 .ipynb_checkpoints/
