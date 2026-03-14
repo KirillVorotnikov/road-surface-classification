@@ -1,0 +1,54 @@
+# DVC Configuration for Yandex Cloud Object Storage
+# ==================================================
+#
+# This project uses DVC with Yandex Cloud S3-compatible storage.
+#
+# SETUP INSTRUCTIONS:
+# -------------------
+#
+# 1. Create a Yandex Cloud bucket:
+#    https://console.cloud.yandex.ru/folders/<folder-id>/storage
+#
+# 2. Get credentials:
+#    - Access Key ID
+#    - Secret Access Key
+#    - Bucket name
+#
+# 3. Configure DVC (run these commands):
+#
+#    # Initialize DVC
+#    dvc init
+#
+#    # Add Yandex Cloud remote (replace with your values)
+#    dvc remote add -d storage s3://<your-bucket-name>/dvc-storage
+#
+#    # Configure S3 endpoint for Yandex Cloud
+#    dvc remote modify storage endpointurl https://storage.yandexcloud.net
+#
+#    # Set credentials (or use environment variables)
+#    dvc remote modify storage access_key_id <your-access-key>
+#    dvc remote modify storage secret_access_key <your-secret-key>
+#
+# 4. Commit DVC configuration:
+#    git add .dvc/config
+#    git commit -m "feat: initialize DVC with Yandex Cloud storage"
+#
+# 5. Add data directories:
+#    dvc add data/raw
+#    dvc add data/processed
+#
+# 6. Push to remote:
+#    dvc push
+#
+# ENVIRONMENT VARIABLES (alternative to storing credentials in config):
+# ---------------------------------------------------------------------
+# AWS_ACCESS_KEY_ID     - Your Yandex Cloud access key
+# AWS_SECRET_ACCESS_KEY - Your Yandex Cloud secret key
+#
+# USAGE EXAMPLES:
+# ---------------
+# dvc add data/raw/audio           # Track new data
+# dvc push                         # Upload to Yandex Cloud
+# dvc pull                         # Download from Yandex Cloud
+# dvc status                       # Check data status
+# dvc gc                           # Garbage collect unused data

@@ -1,9 +1,27 @@
-.PHONY: setup train-audio train-video test lint format clean
+.PHONY: setup setup-dvc train-audio train-video test lint format clean dvc-init dvc-push dvc-pull dvc-status
 
 # ── Установка ──
 setup:
 	pip install -e ".[dev]"
 	pre-commit install
+
+setup-dvc:
+	pip install -e ".[dev,dvc]"
+
+# ── DVC ──
+dvc-init:
+	dvc init
+	dvc remote add -d storage s3://$(BUCKET)/dvc-storage
+	dvc remote modify storage endpointurl https://storage.yandexcloud.net
+
+dvc-push:
+	dvc push
+
+dvc-pull:
+	dvc pull
+
+dvc-status:
+	dvc status
 
 # ── Обучение ──
 train-audio:
