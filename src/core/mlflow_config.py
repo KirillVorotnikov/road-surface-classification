@@ -51,12 +51,13 @@ class MLflowConfig:
         if self.tracking_uri:
             mlflow.set_tracking_uri(self.tracking_uri)
 
-        mlflow.set_experiment(self.experiment_name)
-
+        # Pass artifact_location on first call to avoid double setup
         if self.artifact_location and self.artifact_location.startswith("s3://"):
             mlflow.set_experiment(
                 self.experiment_name, artifact_location=self.artifact_location
             )
+        else:
+            mlflow.set_experiment(self.experiment_name)
 
     def start_run(
         self, run_name: str | None = None, tags: dict | None = None, **kwargs
