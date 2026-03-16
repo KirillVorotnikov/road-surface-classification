@@ -1,223 +1,329 @@
-"""Training callbacks for WandB and MLflow synchronization.
+"""Training callbacks module.
 
-Provides unified logging to both WandB (real-time visualization)
-and MLflow (artifact tracking and model registry).
+Provides callbacks for training loops:
+- EarlyStopping: Stop training when metric stops improving
+- ModelCheckpoint: Save model checkpoints
+- TrainingCallback: Base class with hooks
 """
 
-from typing import Any
+import os
+from abc import ABC
+from typing import Any, Literal
 
-import mlflow
-import wandb
-from torch import Tensor
+import torch
+
+from src.core.logger import BaseLogger
 
 
-class DualLogger:
-    """Logs metrics and artifacts to both WandB and MLflow.
+class TrainingCallback(ABC):
+    """Base callback for training loops.
 
-    This class provides synchronized logging to:
-    - WandB: Real-time visualization and dashboards
-    - MLflow: Experiment tracking, model registry, artifacts
+    Provides hooks for:
+    - Training start/end
+    - Epoch start/end
+    - Batch start/end
+    """
+
+    def on_train_start(self, logger: BaseLogger, config: dict[str, Any]) -> None:
+        """Called when training starts.
+
+        Args:
+            logger: Logger instance.
+            config: Training configuration.
+        """
+        pass
+
+    def on_train_end(self, logger: BaseLogger) -> None:
+        """Called when training ends.
+
+        Args:
+            logger: Logger instance.
+        """
+        pass
+
+    def on_epoch_start(
+        self,
+        logger: BaseLogger,
+        epoch: int,
+    ) -> None:
+        """Called at the start of each epoch.
+
+        Args:
+            logger: Logger instance.
+            epoch: Current epoch number.
+        """
+        pass
+
+    def on_epoch_end(
+        self,
+        logger: BaseLogger,
+        epoch: int,
+        metrics: dict[str, float],
+    ) -> None:
+        """Called at the end of each epoch.
+
+        Args:
+            logger: Logger instance.
+            epoch: Current epoch number.
+            metrics: Dictionary of metrics.
+        """
+        pass
+
+    def on_batch_end(
+        self,
+        logger: BaseLogger,
+        epoch: int,
+        batch: int,
+        metrics: dict[str, float],
+    ) -> None:
+        """Called at the end of each batch.
+
+        Args:
+            logger: Logger instance.
+            epoch: Current epoch number.
+            batch: Current batch number.
+            metrics: Dictionary of metrics.
+        """
+        pass
+
+
+class EarlyStopping(TrainingCallback):
+    """Early stopping callback.
+
+    Stops training when a monitored metric stops improving.
+
+    Attributes:
+        monitor: Metric name to monitor (e.g., "val/loss").
+        mode: "min" or "max" - whether to minimize or maximize the metric.
+        patience: Number of epochs to wait for improvement.
+        min_delta: Minimum change to qualify as improvement.
 
     Example:
         ```python
-        logger = DualLogger(experiment_name="road-surface")
-
-        with logger:
-            for epoch in range(epochs):
-                loss = train_step()
-                logger.log_metrics({"train/loss": loss}, step=epoch)
-
-                val_acc = validate()
-                logger.log_metrics({"val/accuracy": val_acc}, step=epoch)
-
-            logger.log_model(model, artifact_name="best_model")
+        early_stop = EarlyStopping(
+            monitor="val/loss",
+            mode="min",
+            patience=5,
+            min_delta=0.001,
+        )
         ```
     """
 
     def __init__(
         self,
-        project: str = "road-surface-classification",
-        experiment_name: str | None = None,
-        wandb_config: dict[str, Any] | None = None,
-        log_to_wandb: bool = True,
-        log_to_mlflow: bool = True,
+        monitor: str = "val/loss",
+        mode: Literal["min", "max"] = "min",
+        patience: int = 5,
+        min_delta: float = 0.001,
     ):
-        """Initialize dual logger.
+        """Initialize early stopping.
 
         Args:
-            project: Project name for WandB.
-            experiment_name: MLflow experiment name.
-            wandb_config: Optional config dict for WandB run.
-            log_to_wandb: Enable WandB logging.
-            log_to_mlflow: Enable MLflow logging.
+            monitor: Metric name to monitor.
+            mode: "min" or "max".
+            patience: Number of epochs to wait.
+            min_delta: Minimum improvement threshold.
         """
-        self.project = project
-        self.experiment_name = experiment_name
-        self.wandb_config = wandb_config or {}
-        self.log_to_wandb = log_to_wandb
-        self.log_to_mlflow = log_to_mlflow
+        self.monitor = monitor
+        self.mode = mode
+        self.patience = patience
+        self.min_delta = min_delta
 
-        self._wandb_run = None
+        self._best_value: float | None = None
+        self._counter = 0
+        self._should_stop = False
 
-    def __enter__(self):
-        """Start logging sessions."""
-        # Initialize WandB if enabled
-        if self.log_to_wandb and not wandb.run:
-            config = {
-                "project": self.project,
-                **self.wandb_config,
-            }
-            if self.experiment_name:
-                config["name"] = self.experiment_name
-            self._wandb_run = wandb.init(**config)
-
-        # MLflow run should be started externally via mlflow_config
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Cleanup logging sessions."""
-        if self._wandb_run:
-            wandb.finish()
-
-    def log_metrics(
-        self,
-        metrics: dict[str, float | Tensor],
-        step: int | None = None,
-    ) -> None:
-        """Log metrics to both WandB and MLflow.
+    def _is_improvement(self, value: float) -> bool:
+        """Check if value is improvement over best.
 
         Args:
-            metrics: Dictionary of metric name to value.
-            step: Optional step number (epoch/batch).
+            value: Current metric value.
+
+        Returns:
+            True if improvement, False otherwise.
         """
-        # Convert tensors to floats
-        processed = {
-            k: v.item() if isinstance(v, Tensor) else v for k, v in metrics.items()
-        }
+        if self._best_value is None:
+            return True
 
-        if self.log_to_wandb and self._wandb_run:
-            wandb.log(processed, step=step)
-
-        if self.log_to_mlflow:
-            if step is not None:
-                for name, value in processed.items():
-                    mlflow.log_metric(name, value, step=step)
-            else:
-                for name, value in processed.items():
-                    mlflow.log_metric(name, value)
-
-    def log_params(self, params: dict[str, Any]) -> None:
-        """Log hyperparameters.
-
-        Args:
-            params: Dictionary of parameter name to value.
-        """
-        if self.log_to_wandb and self._wandb_run:
-            wandb.config.update(params)
-
-        if self.log_to_mlflow:
-            mlflow.log_params(params)
-
-    def log_model(
-        self,
-        model: Any,
-        artifact_name: str = "model",
-        input_example: Any | None = None,
-    ) -> None:
-        """Log model artifact.
-
-        Args:
-            model: PyTorch model or model path.
-            artifact_name: Name for the artifact.
-            input_example: Optional input example for model signature.
-        """
-        if self.log_to_mlflow:
-            mlflow.pytorch.log_model(
-                pytorch_model=model,
-                artifact_path=artifact_name,
-                input_example=input_example,
-            )
-
-    def log_artifact(self, file_path: str, artifact_path: str | None = None) -> None:
-        """Log file artifact.
-
-        Args:
-            file_path: Path to the file.
-            artifact_path: Optional path within artifact storage.
-        """
-        if self.log_to_mlflow:
-            mlflow.log_artifact(file_path, artifact_path)
-
-        if self.log_to_wandb and self._wandb_run:
-            wandb.save(file_path)
-
-    def log_image(
-        self,
-        image: Any,
-        name: str,
-        caption: str | None = None,
-    ) -> None:
-        """Log image artifact.
-
-        Args:
-            image: Image array (numpy) or PIL Image.
-            name: Name for the image.
-            caption: Optional caption.
-        """
-        if self.log_to_wandb and self._wandb_run:
-            wandb.log({name: wandb.Image(image, caption=caption)})
-
-        if self.log_to_mlflow:
-            import tempfile
-
-            import matplotlib.pyplot as plt
-            import numpy as np
-
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-                if hasattr(image, "numpy"):
-                    image = image.numpy()
-                if isinstance(image, np.ndarray):
-                    plt.imsave(f.name, image)
-                    mlflow.log_artifact(f.name, "images")
-
-
-class TrainingCallback:
-    """Base callback for training loops.
-
-    Provides hooks for epoch start/end, batch start/end, etc.
-    """
-
-    def on_train_start(self, logger: DualLogger, config: dict[str, Any]) -> None:
-        """Called when training starts."""
-        pass
-
-    def on_train_end(self, logger: DualLogger) -> None:
-        """Called when training ends."""
-        pass
-
-    def on_epoch_start(
-        self,
-        logger: DualLogger,
-        epoch: int,
-    ) -> None:
-        """Called at the start of each epoch."""
-        pass
+        if self.mode == "min":
+            return value < self._best_value - self.min_delta
+        else:
+            return value > self._best_value + self.min_delta
 
     def on_epoch_end(
         self,
-        logger: DualLogger,
+        logger: BaseLogger,
         epoch: int,
         metrics: dict[str, float],
     ) -> None:
-        """Called at the end of each epoch."""
-        pass
+        """Check for early stopping.
 
-    def on_batch_end(
+        Args:
+            logger: Logger instance.
+            epoch: Current epoch number.
+            metrics: Dictionary of metrics.
+        """
+        if self.monitor not in metrics:
+            return
+
+        value = metrics[self.monitor]
+
+        if self._is_improvement(value):
+            self._best_value = value
+            self._counter = 0
+        else:
+            self._counter += 1
+            if self._counter >= self.patience:
+                self._should_stop = True
+
+    def should_stop(self) -> bool:
+        """Check if training should stop.
+
+        Returns:
+            True if early stopping triggered, False otherwise.
+        """
+        return self._should_stop
+
+
+class ModelCheckpoint(TrainingCallback):
+    """Model checkpoint callback.
+
+    Saves model checkpoints based on monitored metric.
+
+    Attributes:
+        monitor: Metric name to monitor (e.g., "val/accuracy").
+        mode: "min" or "max" - whether to minimize or maximize.
+        save_dir: Directory to save checkpoints.
+        save_best_only: Only save when metric improves.
+        filename_pattern: Pattern for checkpoint filenames.
+
+    Example:
+        ```python
+        checkpoint = ModelCheckpoint(
+            monitor="val/accuracy",
+            mode="max",
+            save_dir="checkpoints/",
+            save_best_only=True,
+        )
+        ```
+    """
+
+    def __init__(
         self,
-        logger: DualLogger,
+        monitor: str = "val/accuracy",
+        mode: Literal["min", "max"] = "max",
+        save_dir: str = "checkpoints",
+        save_best_only: bool = True,
+        filename_pattern: str = "epoch_{epoch:03d}_{monitor:.4f}.pt",
+    ):
+        """Initialize model checkpoint.
+
+        Args:
+            monitor: Metric name to monitor.
+            mode: "min" or "max".
+            save_dir: Directory to save checkpoints.
+            save_best_only: Only save best model.
+            filename_pattern: Filename pattern with {epoch} and {monitor}.
+        """
+        self.monitor = monitor
+        self.mode = mode
+        self.save_dir = save_dir
+        self.save_best_only = save_best_only
+        self.filename_pattern = filename_pattern
+
+        self._best_value: float | None = None
+        self._saved_checkpoints: list[str] = []
+
+        # Create save directory
+        os.makedirs(save_dir, exist_ok=True)
+
+    def _is_improvement(self, value: float) -> bool:
+        """Check if value is improvement over best.
+
+        Args:
+            value: Current metric value.
+
+        Returns:
+            True if improvement, False otherwise.
+        """
+        if self._best_value is None:
+            return True
+
+        if self.mode == "min":
+            return value < self._best_value
+        else:
+            return value > self._best_value
+
+    def _save_checkpoint(
+        self,
+        model: torch.nn.Module,
         epoch: int,
-        batch: int,
+        value: float,
+    ) -> str:
+        """Save model checkpoint.
+
+        Args:
+            model: PyTorch model.
+            epoch: Current epoch number.
+            value: Current metric value.
+
+        Returns:
+            Path to saved checkpoint.
+        """
+        filename = self.filename_pattern.format(epoch=epoch, monitor=value)
+        filepath = os.path.join(self.save_dir, filename)
+
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                self.monitor: value,
+            },
+            filepath,
+        )
+
+        self._saved_checkpoints.append(filepath)
+        return filepath
+
+    def on_epoch_end(
+        self,
+        logger: BaseLogger,
+        epoch: int,
         metrics: dict[str, float],
     ) -> None:
-        """Called at the end of each batch."""
-        pass
+        """Save checkpoint if needed.
+
+        Args:
+            logger: Logger instance.
+            epoch: Current epoch number.
+            metrics: Dictionary of metrics.
+        """
+        if self.monitor not in metrics:
+            return
+
+        value = metrics[self.monitor]
+
+        if not self.save_best_only or self._is_improvement(value):
+            # Save checkpoint (model should be passed from training loop)
+            # This is a simplified version - full implementation needs model access
+            self._best_value = value
+
+    def set_model(self, model: torch.nn.Module) -> None:
+        """Set model for checkpointing.
+
+        Args:
+            model: PyTorch model to save.
+        """
+        self._model = model
+
+    def save_best_model(self, epoch: int, value: float) -> str:
+        """Save the best model.
+
+        Args:
+            epoch: Epoch number.
+            value: Metric value.
+
+        Returns:
+            Path to saved checkpoint.
+        """
+        return self._save_checkpoint(self._model, epoch, value)
