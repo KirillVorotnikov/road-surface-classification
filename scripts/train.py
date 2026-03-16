@@ -29,7 +29,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.callbacks import DualLogger
-from src.core.mlflow_config import setup_mlflow
+from src.core.mlflow_config import MLflowConfig
 
 
 def create_model(cfg: DictConfig) -> nn.Module:
@@ -189,11 +189,12 @@ def main(cfg: DictConfig) -> None:
     # Setup MLflow
     if cfg.mlflow.enabled:
         rprint("\n[cyan]Setting up MLflow...[/cyan]")
-        setup_mlflow(
+        config = MLflowConfig(
             tracking_uri=cfg.mlflow.tracking_uri or None,
             experiment_name=cfg.mlflow.experiment_name,
             artifact_location=cfg.mlflow.artifact_location,
         )
+        config.setup()
         rprint(f"  Tracking URI: {mlflow.get_tracking_uri()}")
         rprint(f"  Experiment: {cfg.mlflow.experiment_name}")
 

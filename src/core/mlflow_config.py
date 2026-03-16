@@ -79,27 +79,3 @@ class MLflowConfig:
             merged_tags["mlflow.runName"] = run_name
 
         return mlflow.start_run(tags=merged_tags, **kwargs)
-
-
-def setup_mlflow(
-    tracking_uri: str | None = None,
-    experiment_name: str = "road-surface-classification",
-    artifact_location: str | None = None,
-) -> MLflowConfig:
-    """Convenience function to setup MLflow tracking.
-
-    Args:
-        tracking_uri: MLflow server URL.
-        experiment_name: Experiment name.
-        artifact_location: S3 location for artifacts.
-
-    Returns:
-        Configured MLflowConfig instance.
-    """
-    config = MLflowConfig(
-        tracking_uri=tracking_uri,
-        experiment_name=experiment_name,
-        artifact_location=artifact_location,
-    )
-    config.setup()
-    return config

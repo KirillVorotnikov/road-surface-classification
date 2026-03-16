@@ -10,7 +10,7 @@ Tests cover:
 import os
 from unittest.mock import patch
 
-from src.core.mlflow_config import MLflowConfig, setup_mlflow
+from src.core.mlflow_config import MLflowConfig
 
 
 class TestMLflowConfigInit:
@@ -160,20 +160,3 @@ class TestMLflowConfigStartRun:
             tags={"project": "rsc", "env": "test", "mlflow.runName": "override-run"},
             **{},
         )
-
-
-class TestHelperFunctions:
-    """Test helper functions."""
-
-    @patch("mlflow.set_experiment")
-    def test_setup_mlflow(self, mock_set_experiment):
-        """Test setup_mlflow convenience function."""
-        config = setup_mlflow(
-            tracking_uri="http://test:5000",
-            experiment_name="test-exp",
-            artifact_location="s3://bucket/artifacts",
-        )
-
-        assert config.tracking_uri == "http://test:5000"
-        assert config.experiment_name == "test-exp"
-        assert config.artifact_location == "s3://bucket/artifacts"
