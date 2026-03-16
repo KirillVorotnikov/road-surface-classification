@@ -10,7 +10,7 @@ Tests cover:
 import os
 from unittest.mock import patch
 
-from src.core.mlflow_config import MLflowConfig, get_mlflow_config, setup_mlflow
+from src.core.mlflow_config import MLflowConfig, setup_mlflow
 
 
 class TestMLflowConfigInit:
@@ -164,30 +164,6 @@ class TestMLflowConfigStartRun:
 
 class TestHelperFunctions:
     """Test helper functions."""
-
-    @patch.dict(os.environ, {}, clear=True)
-    @patch("mlflow.set_experiment")
-    def test_get_mlflow_config_defaults(self, mock_set_experiment):
-        """Test get_mlflow_config with no environment."""
-        config = get_mlflow_config()
-        assert config.experiment_name == "road-surface-classification"
-        assert config.tracking_uri is None
-
-    @patch.dict(
-        os.environ,
-        {
-            "MLFLOW_TRACKING_URI": "http://env:5000",
-            "MLFLOW_EXPERIMENT": "env-experiment",
-            "MLFLOW_RUN_NAME": "env-run",
-        },
-    )
-    @patch("mlflow.set_experiment")
-    def test_get_mlflow_config_from_env(self, mock_set_experiment):
-        """Test get_mlflow_config reads environment variables."""
-        config = get_mlflow_config()
-        assert config.tracking_uri == "http://env:5000"
-        assert config.experiment_name == "env-experiment"
-        assert config.run_name == "env-run"
 
     @patch("mlflow.set_experiment")
     def test_setup_mlflow(self, mock_set_experiment):

@@ -81,21 +81,6 @@ class MLflowConfig:
         return mlflow.start_run(tags=merged_tags, **kwargs)
 
 
-def get_mlflow_config() -> MLflowConfig:
-    """Get MLflow configuration from environment.
-
-    Returns:
-        MLflowConfig instance with environment-based settings.
-    """
-    return MLflowConfig(
-        tracking_uri=os.environ.get("MLFLOW_TRACKING_URI"),
-        experiment_name=os.environ.get(
-            "MLFLOW_EXPERIMENT", "road-surface-classification"
-        ),
-        run_name=os.environ.get("MLFLOW_RUN_NAME"),
-    )
-
-
 def setup_mlflow(
     tracking_uri: str | None = None,
     experiment_name: str = "road-surface-classification",
