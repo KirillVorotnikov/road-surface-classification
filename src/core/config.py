@@ -1,45 +1,27 @@
-from dataclasses import dataclass, field
 from omegaconf import OmegaConf, DictConfig
 from pathlib import Path
-from typing import List
 
-
-@dataclass
-class ProjectConfig:
-    name: str = 'road-surface-classification'
-    classes: List[str] = field(default_factory=lambda: [
-        "dry_asphalt", "wet_asphalt", "snow", "ice", "gravel"
-    ])
-    num_classes: int = 5
-    seed: int = 42
-
-@dataclass
-class TrainingConfig:
-    lr: float = 1e-4
-    weight_decay: float = 0.01
-    epochs: int = 50
-    batch_size: int = 32
-    scheduler: str = "cosine"
-    warmup_epochs: int = 3
-    early_stopping_patience: int = 10
-    label_smoothing: float = 0.1
-    num_workers: int = 4
-
-@dataclass
-class LoggingConfig:
-    tool : str = 'mlflow'
-    project: str = "road-surface-classification"
-    log_every_n_steps: int = 10
-    save_top_k: int = 5
 
 def load_config(config_path: str) -> DictConfig:
-    """Load config from a yaml file."""
-    config = OmegaConf.load(config_path)
-    return config
+    """Load config from YAML."""
+    cfg = OmegaConf.load(config_path)
 
-def merge_configs(base_path: str, override_path: str) -> DictConfig:
-    """Merge configs from a yaml file."""
-    base_config = OmegaConf.load(base_path)
-    override_config = OmegaConf.load(override_path)
-    config = OmegaConf.merge(base_config, override_config)
-    return config
+    if "defaults" in cfg:
+        for default in cfg.defaults:
+            base_path = _resolve_default_path(config_path, default)
+            if base_path and base_path.exists():
+                base = OmegaConf.load(str(base_path))
+                cfg = OmegaConf.merge(base, cfg)
+
+    return cfg
+
+
+def _resolve_default_path(config_path: str, default: str) -> Path | None:
+    """Resolve the path to the base config."""
+    config_dir = Path(config_path).parent
+    if default.startswith("/"):
+        configs_root = config_dir
+        while configs_root.name != "configs" and configs_root != configs_root.parent:
+            configs_root = configs_root.parent
+        return configs_root / f"{default.lstrip('/')}.yaml"
+    return config_dir / f"{default}.yaml"

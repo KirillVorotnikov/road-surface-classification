@@ -1,0 +1,16 @@
+project:
+  name: road-surface-classification
+  classes:
+    - dry_asphalt
+    - wet_asphalt
+    - snow
+    - ice
+    - gravel
+  num_classes: 5
+  seed: 42
+
+logging:
+  tool: mlflow
+  experiment_name: road-surface-classification
+
+checkpoint_dir: checkpoints
