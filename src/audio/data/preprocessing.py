@@ -1,9 +1,8 @@
 import os
+from pathlib import Path
 import numpy as np
 import librosa
 import torch
-from typing import Union
-
 
 class AudioPreprocessor:
     def __init__(
@@ -27,10 +26,11 @@ class AudioPreprocessor:
         self.use_mfcc = use_mfcc
         self.n_mfcc = n_mfcc
 
-    def load_audio(self, file_path: str) -> np.ndarray:
+    def load_audio(self, file_path: str | Path) -> np.ndarray:
         """
         Загружает аудиофайл, конвертирует в моно и ресемплит на лету.
         """
+        file_path = str(file_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Audio file not found: {file_path}")
 
@@ -102,7 +102,7 @@ class AudioPreprocessor:
 
         return (features - mean) / std
 
-    def process(self, file_path: str) -> torch.Tensor:
+    def process(self, file_path: str | Path) -> torch.Tensor:
         """
         Полный пайплайн обработки одного файла
         """
@@ -120,6 +120,6 @@ class AudioPreprocessor:
 
         return torch.from_numpy(features).float()
 
-    def __call__(self, file_path: str) -> torch.Tensor:
+    def __call__(self, file_path: str | Path) -> torch.Tensor:
         """Вызов как функция"""
         return self.process(file_path)
