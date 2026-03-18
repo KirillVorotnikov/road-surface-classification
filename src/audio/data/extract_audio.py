@@ -7,7 +7,6 @@
 import os
 import sys
 import subprocess as sp
-import shutil
 from pathlib import Path
 from typing import List, Optional, Tuple
 from dataclasses import dataclass
@@ -207,6 +206,7 @@ def slice_audio(
     clip_duration: float,
     overlap: float = 0.0,
     prefix: str = "clip",
+    sample_rate: int = 16000
 ) -> List[AudioClip]:
     """
     Нарезка аудиофайла на клипы фиксированной длины.
@@ -244,7 +244,7 @@ def slice_audio(
             "-ss", str(start_time),
             "-t", str(actual_duration),
             "-acodec", "pcm_s16le",
-            "-ar", "16000",
+            "-ar", str(sample_rate),
             "-ac", "1",
             "-y",
             str(output_path),
