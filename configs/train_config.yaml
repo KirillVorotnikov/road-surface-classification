@@ -2,7 +2,7 @@
 # =======================================================
 # Use with Hydra: python scripts/train.py --config-name train_config
 
-# Experiment name (used for MLflow and WandB)
+# Experiment name (used for MLflow)
 experiment_name: road-surface-audio
 
 # Project root directory
@@ -69,14 +69,6 @@ mlflow:
   log_every_n_epochs: 1
   log_model: true
   log_figures: true
-
-# WandB tracking
-wandb:
-  enabled: true
-  project: road-surface-classification
-  entity: ${oc.env:WANDB_ENTITY,}
-  log_every_n_epochs: 1
-  log_model: false  # MLflow handles model artifacts
 
 # Checkpointing
 checkpoint:

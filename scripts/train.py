@@ -4,7 +4,6 @@
 Supports:
 - Hydra configuration management
 - MLflow experiment tracking
-- WandB visualization
 - DVC data management
 
 Usage:
@@ -18,7 +17,6 @@ import sys
 from pathlib import Path
 
 import hydra
-import mlflow
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, OmegaConf
@@ -28,8 +26,8 @@ from tqdm import tqdm
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.core.callbacks import DualLogger
-from src.core.mlflow_config import setup_mlflow
+from src.core.callbacks import EarlyStopping, ModelCheckpoint
+from src.core.logger import MlflowLogger
 
 
 def create_model(cfg: DictConfig) -> nn.Module:
@@ -186,17 +184,6 @@ def main(cfg: DictConfig) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     rprint(f"\n[cyan]Device:[/cyan] {device}")
 
-    # Setup MLflow
-    if cfg.mlflow.enabled:
-        rprint("\n[cyan]Setting up MLflow...[/cyan]")
-        setup_mlflow(
-            tracking_uri=cfg.mlflow.tracking_uri or None,
-            experiment_name=cfg.mlflow.experiment_name,
-            artifact_location=cfg.mlflow.artifact_location,
-        )
-        rprint(f"  Tracking URI: {mlflow.get_tracking_uri()}")
-        rprint(f"  Experiment: {cfg.mlflow.experiment_name}")
-
     # Create model
     model = create_model(cfg)
     model = model.to(device)
@@ -236,14 +223,30 @@ def main(cfg: DictConfig) -> None:
     rprint(f"  Train samples: {len(train_loader.dataset)}")
     rprint(f"  Val samples: {len(val_loader.dataset)}")
 
-    # Initialize dual logger (WandB + MLflow)
-    rprint("\n[cyan]Initializing loggers...[/cyan]")
-    with DualLogger(
-        project=cfg.wandb.project,
-        experiment_name=cfg.experiment_name,
-        wandb_config=dict(OmegaConf.to_container(cfg)),
-        log_to_wandb=cfg.wandb.enabled,
-        log_to_mlflow=cfg.mlflow.enabled,
+    # Initialize MLflow logger
+    rprint("\n[cyan]Initializing MLflow logger...[/cyan]")
+
+    # Setup early stopping and model checkpoint callbacks
+    early_stopping = EarlyStopping(
+        monitor="val/loss",
+        mode="min",
+        patience=cfg.training.patience,
+        min_delta=0.001,
+    )
+
+    checkpoint = ModelCheckpoint(
+        monitor="val/loss",
+        mode="min",
+        save_dir="checkpoints",
+        save_best_only=True,
+    )
+    checkpoint.set_model(model)
+
+    with MlflowLogger(
+        tracking_uri=cfg.mlflow.tracking_uri or None,
+        experiment_name=cfg.mlflow.experiment_name,
+        artifact_location=cfg.mlflow.artifact_location,
+        run_name=cfg.experiment_name,
     ) as logger:
         # Log hyperparameters
         logger.log_params(
@@ -257,70 +260,68 @@ def main(cfg: DictConfig) -> None:
             }
         )
 
-        # Start MLflow run
-        if cfg.mlflow.enabled:
-            with mlflow.start_run(run_name=cfg.experiment_name, nested=True):
-                # Training loop
-                best_val_loss = float("inf")
-                patience_counter = 0
+        # Training loop
+        best_val_loss = float("inf")
 
-                for epoch in range(cfg.training.epochs):
-                    # Train
-                    train_loss = train_epoch(
-                        model,
-                        train_loader,
-                        criterion,
-                        optimizer,
-                        device,
-                        epoch,
-                        log_every_n=cfg.mlflow.log_every_n_epochs,
-                    )
+        for epoch in range(cfg.training.epochs):
+            # Train
+            train_loss = train_epoch(
+                model,
+                train_loader,
+                criterion,
+                optimizer,
+                device,
+                epoch,
+                log_every_n=cfg.mlflow.log_every_n_epochs,
+            )
 
-                    # Validate
-                    val_loss, val_acc = validate(
-                        model,
-                        val_loader,
-                        criterion,
-                        device,
-                    )
+            # Validate
+            val_loss, val_acc = validate(
+                model,
+                val_loader,
+                criterion,
+                device,
+            )
 
-                    # Update scheduler
-                    scheduler.step()
+            # Update scheduler
+            scheduler.step()
 
-                    # Log metrics
-                    metrics = {
-                        "train/loss": train_loss,
-                        "val/loss": val_loss,
-                        "val/accuracy": val_acc,
-                        "training/lr": scheduler.get_last_lr()[0],
-                    }
-                    logger.log_metrics(metrics, step=epoch)
+            # Log metrics
+            metrics = {
+                "train/loss": train_loss,
+                "val/loss": val_loss,
+                "val/accuracy": val_acc,
+                "training/lr": scheduler.get_last_lr()[0],
+            }
+            logger.log_metrics(metrics, step=epoch)
 
-                    rprint(
-                        f"Epoch {epoch+1}/{cfg.training.epochs}: "
-                        f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
-                        f"val_acc={val_acc:.2f}%"
-                    )
+            rprint(
+                f"Epoch {epoch+1}/{cfg.training.epochs}: "
+                f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
+                f"val_acc={val_acc:.2f}%"
+            )
 
-                    # Early stopping
-                    if val_loss < best_val_loss:
-                        best_val_loss = val_loss
-                        patience_counter = 0
+            # Early stopping check
+            epoch_metrics = {"val/loss": val_loss, "val/accuracy": val_acc}
+            early_stopping.on_epoch_end(logger, epoch, epoch_metrics)
 
-                        # Save best model
-                        if cfg.mlflow.log_model:
-                            logger.log_model(model, artifact_name="best_model")
-                    else:
-                        patience_counter += 1
-                        if patience_counter >= cfg.training.patience:
-                            rprint("\n[yellow]Early stopping triggered[/yellow]")
-                            break
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                checkpoint.save_best_model(epoch, val_loss)
 
-                # Log final model
+                # Save best model to MLflow
                 if cfg.mlflow.log_model:
-                    logger.log_model(model, artifact_name="final_model")
+                    logger.log_model(model, artifact_name="best_model")
 
-                rprint("\n[green bold]Training complete![/green bold]")
+            if early_stopping.should_stop():
+                rprint("\n[yellow]Early stopping triggered[/yellow]")
+                break
+
+        # Log final model
+        if cfg.mlflow.log_model:
+            logger.log_model(model, artifact_name="final_model")
+
+        rprint("\n[green bold]Training complete![/green bold]")
 
     rprint("\n[cyan]Done![/cyan]")
 
