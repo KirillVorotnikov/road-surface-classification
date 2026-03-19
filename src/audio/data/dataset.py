@@ -124,9 +124,8 @@ class AudioMelDataset(Dataset):
         # 6. Normalization
         features = self.preprocessor.normalize(features)
 
-        # 7. Add a channel dimension to the tensor
-        features = torch.from_numpy(features).float()
-        features = features.unsqueeze(0)
+        # 7. To tensor + add channel dim: (n_mels, T) → (1, n_mels, T)
+        features = torch.from_numpy(features).float().unsqueeze(0)
 
         return features, label
 
