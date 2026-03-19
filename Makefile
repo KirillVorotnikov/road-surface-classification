@@ -1,4 +1,4 @@
-.PHONY: setup setup-dvc setup-kaggle train-audio train-video test lint format clean dvc-init dvc-push dvc-pull dvc-status kaggle-push notebook notebook-lab
+.PHONY: setup setup-dvc setup-kaggle train-audio train-video test lint format clean dvc-init dvc-push dvc-pull dvc-status kaggle-push notebook notebook-lab train-cnn train-resnet train-effnet train-local predict check
 
 # ── Установка ──
 setup:
@@ -28,16 +28,32 @@ dvc-status:
 
 # ── Обучение ──
 train-audio:
-	python scripts/train.py --config-path ../configs/audio/models \
-	                        --config-name resnet18_mel
+	python scripts/train.py --config configs/audio/models/resnet18_mel.yaml
+
+train-cnn:
+	python scripts/train.py --config configs/audio/models/simple_cnn.yaml
+
+train-resnet:
+	python scripts/train.py --config configs/audio/models/resnet18_mel.yaml
+
+train-effnet:
+	python scripts/train.py --config configs/audio/models/efficientnet_b0.yaml
+
+train-local:
+	python scripts/train.py --config $(CONFIG) --logger file
+
+train-hydra:
+	python scripts/train_hydra.py --config-name train_config
 
 train-video:
-	python scripts/train.py --config-path ../configs/video/models \
-	                        --config-name efficientnet_b2
+	python scripts/train.py --config configs/video/models/efficientnet_b2.yaml
 
 # ── Оценка ──
 evaluate:
 	python scripts/evaluate.py --checkpoint $(CKPT) --config $(CONFIG)
+
+predict:
+	python scripts/predict.py --checkpoint $(CKPT) --config $(CONFIG) --input $(INPUT)
 
 # ── Тесты ──
 test:
@@ -53,7 +69,7 @@ test-video:
 	pytest tests/video/ -v
 
 test-cov:
-	pytest tests/ -v --cov=src --cov-report=html
+	pytest tests/ -v --cov=src --cov-report=html --cov-report=term-missing
 
 # ── Код ──
 lint:
@@ -62,9 +78,12 @@ lint:
 format:
 	ruff format src/ scripts/ tests/
 
+check: lint test
+
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	rm -rf .pytest_cache htmlcov .ruff_cache
+	rm -rf outputs/
 
 # ── Kaggle ──
 kaggle-push:
