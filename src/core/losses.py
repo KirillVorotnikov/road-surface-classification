@@ -14,7 +14,8 @@ class FocalLoss(nn.Module):
 
     def forward(self, logits, targets):
         ce_loss = F.cross_entropy(
-            logits, targets,
+            logits,
+            targets,
             weight=self.alpha,
             reduction="none",
             label_smoothing=self.label_smoothing,

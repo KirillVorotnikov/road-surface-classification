@@ -13,36 +13,50 @@ Usage:
         --save-predictions predictions.csv
 """
 
-import sys
 import argparse
+import sys
 from pathlib import Path
 
-import torch
 import pandas as pd
+import torch
 from rich.console import Console
 from rich.table import Table
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.core.config import load_config
-from src.core.seed import set_seed
-from src.core.device import get_device
-from src.core.metrics import compute_metrics, full_classification_report, compute_confusion_matrix
-from src.audio.models.factory import create_audio_model
 from src.audio.data.dataset import AudioMelDataset
+from src.audio.models.factory import create_audio_model
+from src.core.config import load_config
+from src.core.device import get_device
+from src.core.metrics import (
+    compute_confusion_matrix,
+    compute_metrics,
+    full_classification_report,
+)
+from src.core.seed import set_seed
 
 console = Console()
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate trained model")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to .pt checkpoint")
-    parser.add_argument("--config", type=str, required=True, help="Path to model config")
-    parser.add_argument("--test-csv", type=str, default=None, help="Test CSV (overrides config)")
-    parser.add_argument("--audio-root", type=str, default=None, help="Audio root dir (overrides config)")
+    parser.add_argument(
+        "--checkpoint", type=str, required=True, help="Path to .pt checkpoint"
+    )
+    parser.add_argument(
+        "--config", type=str, required=True, help="Path to model config"
+    )
+    parser.add_argument(
+        "--test-csv", type=str, default=None, help="Test CSV (overrides config)"
+    )
+    parser.add_argument(
+        "--audio-root", type=str, default=None, help="Audio root dir (overrides config)"
+    )
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--save-predictions", type=str, default=None, help="Save predictions to CSV")
+    parser.add_argument(
+        "--save-predictions", type=str, default=None, help="Save predictions to CSV"
+    )
     parser.add_argument("--device", type=str, default="auto")
     return parser.parse_args()
 
@@ -138,7 +152,7 @@ def main() -> None:
                 f"{cls['f1-score']:.4f}",
                 f"{cls['precision']:.4f}",
                 f"{cls['recall']:.4f}",
-                str(int(cls['support'])),
+                str(int(cls["support"])),
             )
 
     console.print(class_table)
@@ -146,7 +160,7 @@ def main() -> None:
     # Confusion matrix
     cm = compute_confusion_matrix(all_targets, all_preds, class_names)
     console.print("\n[cyan]Confusion Matrix:[/cyan]")
-    console.print(f"  Rows: true labels, Columns: predicted")
+    console.print("  Rows: true labels, Columns: predicted")
 
     cm_table = Table()
     cm_table.add_column("", style="cyan")
@@ -169,7 +183,7 @@ def main() -> None:
         test_df.to_csv(args.save_predictions, index=False)
         console.print(f"\n[green]Predictions saved to {args.save_predictions}[/green]")
 
-    console.print(f"\n[bold green]Evaluation complete.[/bold green]")
+    console.print("\n[bold green]Evaluation complete.[/bold green]")
 
 
 if __name__ == "__main__":

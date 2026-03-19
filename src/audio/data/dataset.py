@@ -1,11 +1,13 @@
 """PyTorch Dataset for Audio Classification of Road Surfaces."""
 
+from pathlib import Path
+
 import pandas as pd
 import torch
-from pathlib import Path
 from torch.utils.data import Dataset
 
 from src.core.registry import DATASET_REGISTRY
+
 from .preprocessing import AudioPreprocessor
 from .transforms import AudioAugmentations
 
@@ -25,9 +27,7 @@ class AudioMelDataset(Dataset):
         label: int
     """
 
-    CLASS_NAMES = [
-        "dry_asphalt", "wet_asphalt", "snow", "ice", "gravel"
-    ]
+    CLASS_NAMES = ["dry_asphalt", "wet_asphalt", "snow", "ice", "gravel"]
     CLASS_TO_IDX = {name: idx for idx, name in enumerate(CLASS_NAMES)}
     IDX_TO_CLASS = {idx: name for name, idx in CLASS_TO_IDX.items()}
 

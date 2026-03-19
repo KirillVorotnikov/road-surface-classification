@@ -10,6 +10,7 @@ from src.core.logger import FileLogger
 
 class DummyModel(nn.Module):
     """A simple model for testing."""
+
     def __init__(self):
         super().__init__()
         self.linear = nn.Linear(10, 5)
@@ -69,8 +70,10 @@ class TestEarlyStopping:
     def test_min_delta(self):
         """Improvement less than min_delta is not counted."""
         es = EarlyStopping(
-            monitor="val/loss", mode="min",
-            patience=2, min_delta=0.1,
+            monitor="val/loss",
+            mode="min",
+            patience=2,
+            min_delta=0.1,
         )
         logger = self._make_logger()
 
@@ -107,8 +110,10 @@ class TestModelCheckpoint:
             logger = FileLogger(log_dir=tmpdir)
 
             mc = ModelCheckpoint(
-                monitor="val/acc", mode="max",
-                save_dir=tmpdir, save_top_k=3,
+                monitor="val/acc",
+                mode="max",
+                save_dir=tmpdir,
+                save_top_k=3,
             )
             mc.set_model(model)
 
@@ -125,8 +130,10 @@ class TestModelCheckpoint:
             logger = FileLogger(log_dir=tmpdir)
 
             mc = ModelCheckpoint(
-                monitor="val/acc", mode="max",
-                save_dir=tmpdir, save_top_k=3,
+                monitor="val/acc",
+                mode="max",
+                save_dir=tmpdir,
+                save_top_k=3,
             )
             mc.set_model(model)
 
@@ -143,8 +150,10 @@ class TestModelCheckpoint:
             logger = FileLogger(log_dir=tmpdir)
 
             mc = ModelCheckpoint(
-                monitor="val/acc", mode="max",
-                save_dir=tmpdir, save_top_k=2,
+                monitor="val/acc",
+                mode="max",
+                save_dir=tmpdir,
+                save_top_k=2,
             )
             mc.set_model(model)
 
@@ -163,8 +172,10 @@ class TestModelCheckpoint:
             logger = FileLogger(log_dir=tmpdir)
 
             mc = ModelCheckpoint(
-                monitor="val/acc", mode="max",
-                save_dir=tmpdir, save_top_k=3,
+                monitor="val/acc",
+                mode="max",
+                save_dir=tmpdir,
+                save_top_k=3,
             )
             mc.set_model(model)
 
@@ -180,8 +191,10 @@ class TestModelCheckpoint:
             logger = FileLogger(log_dir=tmpdir)
 
             mc = ModelCheckpoint(
-                monitor="val/acc", mode="max",
-                save_dir=tmpdir, save_top_k=3,
+                monitor="val/acc",
+                mode="max",
+                save_dir=tmpdir,
+                save_top_k=3,
             )
             mc.set_model(model)
 
@@ -199,8 +212,10 @@ class TestModelCheckpoint:
             logger = FileLogger(log_dir=tmpdir)
 
             mc = ModelCheckpoint(
-                monitor="val/acc", mode="max",
-                save_dir=tmpdir, save_top_k=3,
+                monitor="val/acc",
+                mode="max",
+                save_dir=tmpdir,
+                save_top_k=3,
             )
             mc.set_model(model)
 
@@ -215,8 +230,10 @@ class TestModelCheckpoint:
             logger = FileLogger(log_dir=tmpdir)
 
             mc = ModelCheckpoint(
-                monitor="val/acc", mode="max",
-                save_dir=tmpdir, save_top_k=3,
+                monitor="val/acc",
+                mode="max",
+                save_dir=tmpdir,
+                save_top_k=3,
             )
             mc.on_epoch_end(logger, 0, {"val/acc": 0.8})
 

@@ -8,12 +8,13 @@ import torch.nn as nn
 
 from src.core.registry import MODEL_REGISTRY
 
-# Importing registers models in MODEL_REGISTRY
-from .simple_cnn import AudioSimpleCNN           # noqa: F401
-from .classifier import (                         # noqa: F401
+from .classifier import (  # noqa: F401
     AudioPretrainedClassifier,
     AudioResNetClassifier,
 )
+
+# Importing registers models in MODEL_REGISTRY
+from .simple_cnn import AudioSimpleCNN  # noqa: F401
 
 
 def create_audio_model(config) -> nn.Module:

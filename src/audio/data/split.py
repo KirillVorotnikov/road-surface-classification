@@ -6,8 +6,9 @@ never appear in both train and val/test sets.
 Output CSVs are saved to data/processed/ (DVC-tracked).
 """
 
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
@@ -44,9 +45,7 @@ def split_by_session(
             df, session_column, val_size, test_size, seed
         )
     else:
-        train_df, val_df, test_df = _split_stratified(
-            df, val_size, test_size, seed
-        )
+        train_df, val_df, test_df = _split_stratified(df, val_size, test_size, seed)
 
     train_path = output_dir / "train.csv"
     val_path = output_dir / "val.csv"

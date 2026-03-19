@@ -2,7 +2,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.core.logger import FileLogger, BaseLogger, create_logger
+from src.core.logger import BaseLogger, FileLogger, create_logger
 
 
 class TestFileLogger:
@@ -32,10 +32,13 @@ class TestFileLogger:
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = FileLogger(log_dir=tmpdir, run_name="test")
 
-            logger.log_metrics({
-                "loss": 0.5,
-                "f1_per_class": {"dry": 0.9, "wet": 0.7},
-            }, step=0)
+            logger.log_metrics(
+                {
+                    "loss": 0.5,
+                    "f1_per_class": {"dry": 0.9, "wet": 0.7},
+                },
+                step=0,
+            )
 
             metrics_file = Path(tmpdir) / "test" / "metrics.jsonl"
             entry = json.loads(metrics_file.read_text().strip())
@@ -49,10 +52,12 @@ class TestFileLogger:
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = FileLogger(log_dir=tmpdir, run_name="test")
 
-            logger.log_params({
-                "lr": 0.001,
-                "model": {"name": "cnn", "layers": 5},
-            })
+            logger.log_params(
+                {
+                    "lr": 0.001,
+                    "model": {"name": "cnn", "layers": 5},
+                }
+            )
 
             params_file = Path(tmpdir) / "test" / "params.json"
             params = json.loads(params_file.read_text())
@@ -70,7 +75,7 @@ class TestFileLogger:
     def test_creates_run_directory(self):
         """Creates a folder for run."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            logger = FileLogger(log_dir=tmpdir, run_name="my_run")
+            _ = FileLogger(log_dir=tmpdir, run_name="my_run")
 
             assert (Path(tmpdir) / "my_run").is_dir()
 

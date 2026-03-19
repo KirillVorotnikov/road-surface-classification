@@ -14,17 +14,21 @@ class TestSplitBySession:
     def test_split_with_session_column(self):
         """Sessions do not overlap between splits."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            df = pd.DataFrame({
-                "filepath": [f"clip_{i}.wav" for i in range(20)],
-                "label": ["dry_asphalt"] * 10 + ["wet_asphalt"] * 10,
-                "session": [f"session_{i // 5}" for i in range(20)],
-            })
+            df = pd.DataFrame(
+                {
+                    "filepath": [f"clip_{i}.wav" for i in range(20)],
+                    "label": ["dry_asphalt"] * 10 + ["wet_asphalt"] * 10,
+                    "session": [f"session_{i // 5}" for i in range(20)],
+                }
+            )
             csv_path = os.path.join(tmpdir, "data.csv")
             df.to_csv(csv_path, index=False)
 
             train_path, val_path, test_path = split_by_session(
-                csv_path=csv_path, output_dir=tmpdir,
-                val_size=0.2, test_size=0.2,
+                csv_path=csv_path,
+                output_dir=tmpdir,
+                val_size=0.2,
+                test_size=0.2,
             )
 
             train = pd.read_csv(train_path)
@@ -43,15 +47,18 @@ class TestSplitBySession:
     def test_fallback_stratified(self):
         """Without session column, uses stratified split."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            df = pd.DataFrame({
-                "filepath": [f"clip_{i}.wav" for i in range(30)],
-                "label": ["dry_asphalt"] * 15 + ["wet_asphalt"] * 15,
-            })
+            df = pd.DataFrame(
+                {
+                    "filepath": [f"clip_{i}.wav" for i in range(30)],
+                    "label": ["dry_asphalt"] * 15 + ["wet_asphalt"] * 15,
+                }
+            )
             csv_path = os.path.join(tmpdir, "data.csv")
             df.to_csv(csv_path, index=False)
 
             train_path, val_path, test_path = split_by_session(
-                csv_path=csv_path, output_dir=tmpdir,
+                csv_path=csv_path,
+                output_dir=tmpdir,
             )
 
             train = pd.read_csv(train_path)
@@ -63,10 +70,12 @@ class TestSplitBySession:
     def test_output_files_created(self):
         """train.csv, val.csv, test.csv are created."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            df = pd.DataFrame({
-                "filepath": [f"clip_{i}.wav" for i in range(20)],
-                "label": ["dry_asphalt"] * 10 + ["wet_asphalt"] * 10,
-            })
+            df = pd.DataFrame(
+                {
+                    "filepath": [f"clip_{i}.wav" for i in range(20)],
+                    "label": ["dry_asphalt"] * 10 + ["wet_asphalt"] * 10,
+                }
+            )
             csv_path = os.path.join(tmpdir, "data.csv")
             df.to_csv(csv_path, index=False)
 

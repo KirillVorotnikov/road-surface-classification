@@ -25,17 +25,24 @@ class BaseLogger(ABC):
     ) -> None: ...
 
     @abstractmethod
-    def log_artifact(self, file_path: str, artifact_path: str | None = None) -> None: ...
+    def log_artifact(
+        self, file_path: str, artifact_path: str | None = None
+    ) -> None: ...
 
     @abstractmethod
     def log_model(
-        self, model: Any, artifact_name: str = "model",
+        self,
+        model: Any,
+        artifact_name: str = "model",
         input_example: Any | None = None,
     ) -> None: ...
 
     @abstractmethod
     def log_image(
-        self, image: Any, name: str, caption: str | None = None,
+        self,
+        image: Any,
+        name: str,
+        caption: str | None = None,
     ) -> None: ...
 
     @abstractmethod
@@ -43,9 +50,7 @@ class BaseLogger(ABC):
 
     # Common utilities
 
-    def _flatten_params(
-        self, params: dict, prefix: str = ""
-    ) -> dict[str, str]:
+    def _flatten_params(self, params: dict, prefix: str = "") -> dict[str, str]:
         """Expanding nested dicts for MLflow/file."""
         flat = {}
         for k, v in params.items():
@@ -58,9 +63,7 @@ class BaseLogger(ABC):
                 flat[key] = str(v)
         return flat
 
-    def _flatten_metrics(
-        self, metrics: dict[str, Any]
-    ) -> dict[str, float]:
+    def _flatten_metrics(self, metrics: dict[str, Any]) -> dict[str, float]:
         """Unfolding nested dicts and converting Tensors."""
         flat = {}
         for k, v in metrics.items():
@@ -122,7 +125,9 @@ class MlflowLogger(BaseLogger):
         mlflow.log_artifact(file_path, artifact_path)
 
     def log_model(
-        self, model: Any, artifact_name: str = "model",
+        self,
+        model: Any,
+        artifact_name: str = "model",
         input_example: Any | None = None,
     ) -> None:
         import mlflow
@@ -134,7 +139,10 @@ class MlflowLogger(BaseLogger):
         )
 
     def log_image(
-        self, image: Any, name: str, caption: str | None = None,
+        self,
+        image: Any,
+        name: str,
+        caption: str | None = None,
     ) -> None:
         import os
         import tempfile
@@ -189,13 +197,18 @@ class FileLogger(BaseLogger):
         pass
 
     def log_model(
-        self, model: Any, artifact_name: str = "model",
+        self,
+        model: Any,
+        artifact_name: str = "model",
         input_example: Any | None = None,
     ) -> None:
         pass
 
     def log_image(
-        self, image: Any, name: str, caption: str | None = None,
+        self,
+        image: Any,
+        name: str,
+        caption: str | None = None,
     ) -> None:
         pass
 

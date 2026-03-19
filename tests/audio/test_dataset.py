@@ -50,9 +50,13 @@ class TestAudioMelDataset:
         """__getitem__ returns (features, label) with correct shapes."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(
-            csv_path=csv_path, audio_root=root,
-            sample_rate=16000, duration_sec=1.0,
-            n_mels=64, n_fft=512, hop_length=128,
+            csv_path=csv_path,
+            audio_root=root,
+            sample_rate=16000,
+            duration_sec=1.0,
+            n_mels=64,
+            n_fft=512,
+            hop_length=128,
         )
 
         features, label = dataset[0]
@@ -77,7 +81,8 @@ class TestAudioMelDataset:
         """Without augmentations, output is deterministic."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(
-            csv_path=csv_path, audio_root=root,
+            csv_path=csv_path,
+            audio_root=root,
             augmentation_preset=None,
         )
 
@@ -91,7 +96,8 @@ class TestAudioMelDataset:
         """Augmented dataset does not raise errors."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(
-            csv_path=csv_path, audio_root=root,
+            csv_path=csv_path,
+            audio_root=root,
             augmentation_preset="light",
         )
 
@@ -121,10 +127,12 @@ class TestAudioMelDataset:
         """Unknown label in CSV raises ValueError."""
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = os.path.join(tmpdir, "bad.csv")
-            pd.DataFrame({
-                "filepath": ["fake.wav"],
-                "label": ["unknown_surface"],
-            }).to_csv(csv_path, index=False)
+            pd.DataFrame(
+                {
+                    "filepath": ["fake.wav"],
+                    "label": ["unknown_surface"],
+                }
+            ).to_csv(csv_path, index=False)
 
             with pytest.raises(ValueError, match="Unknown labels"):
                 AudioMelDataset(csv_path=csv_path, audio_root=tmpdir)
@@ -133,10 +141,12 @@ class TestAudioMelDataset:
         """Missing required column raises ValueError."""
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = os.path.join(tmpdir, "bad.csv")
-            pd.DataFrame({
-                "file": ["fake.wav"],
-                "label": ["dry_asphalt"],
-            }).to_csv(csv_path, index=False)
+            pd.DataFrame(
+                {
+                    "file": ["fake.wav"],
+                    "label": ["dry_asphalt"],
+                }
+            ).to_csv(csv_path, index=False)
 
             with pytest.raises(ValueError, match="missing columns"):
                 AudioMelDataset(csv_path=csv_path, audio_root=tmpdir)
@@ -145,9 +155,12 @@ class TestAudioMelDataset:
         """MFCC mode produces correct feature dimension."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(
-            csv_path=csv_path, audio_root=root,
-            use_mfcc=True, n_mfcc=20,
-            sample_rate=16000, duration_sec=1.0,
+            csv_path=csv_path,
+            audio_root=root,
+            use_mfcc=True,
+            n_mfcc=20,
+            sample_rate=16000,
+            duration_sec=1.0,
         )
 
         features, _ = dataset[0]

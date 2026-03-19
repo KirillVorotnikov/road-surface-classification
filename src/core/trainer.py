@@ -5,14 +5,14 @@ from typing import Any
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
 from rich.console import Console
 from rich.table import Table
+from torch.utils.data import DataLoader
 
-from .metrics import compute_metrics
-from .callbacks import TrainingCallback, EarlyStopping, ModelCheckpoint
-from .logger import BaseLogger
+from .callbacks import EarlyStopping, ModelCheckpoint, TrainingCallback
 from .device import get_device
+from .logger import BaseLogger
+from .metrics import compute_metrics
 
 console = Console()
 
@@ -77,10 +77,16 @@ class Trainer:
 
             # We collect all metrics with prefixes
             all_metrics = {
-                **{f"train/{k}": v for k, v in train_metrics.items()
-                   if not isinstance(v, dict)},
-                **{f"val/{k}": v for k, v in val_metrics.items()
-                   if not isinstance(v, dict)},
+                **{
+                    f"train/{k}": v
+                    for k, v in train_metrics.items()
+                    if not isinstance(v, dict)
+                },
+                **{
+                    f"val/{k}": v
+                    for k, v in val_metrics.items()
+                    if not isinstance(v, dict)
+                },
                 "epoch_time": epoch_time,
                 "lr": self.optimizer.param_groups[0]["lr"],
             }
@@ -120,7 +126,9 @@ class Trainer:
         for cb in self.callbacks:
             cb.on_train_end(self.logger)
 
-        console.print(f"\n[bold green]Best balanced accuracy: {best_score:.4f}[/bold green]")
+        console.print(
+            f"\n[bold green]Best balanced accuracy: {best_score:.4f}[/bold green]"
+        )
         return best_score
 
     def _train_epoch(self) -> dict:
