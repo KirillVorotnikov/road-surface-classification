@@ -1,329 +1,355 @@
 #!/usr/bin/env python3
 """Training script for Road Surface Classification.
 
-Supports:
-- Hydra configuration management
-- MLflow experiment tracking
-- DVC data management
+Supports standalone audio configs and Hydra-style configs.
 
 Usage:
-    python scripts/train.py --config-name train_config
-    python scripts/train.py --config-name train_config model.name=resnet34
-    python scripts/train.py --multirun \
-        model.name=resnet18,resnet34 training.lr=0.001,0.01
+    # Standalone audio config
+    python scripts/train.py --config configs/audio/models/simple_cnn.yaml
+
+    # Override parameters
+    python scripts/train.py --config configs/audio/models/resnet18_mel.yaml \
+        --override training.lr=0.0005 training.epochs=100
+
+    # Use file logger (no MLflow server needed)
+    python scripts/train.py --config configs/audio/models/simple_cnn.yaml \
+        --logger file
 """
 
 import sys
+import argparse
 from pathlib import Path
 
-import hydra
 import torch
-import torch.nn as nn
-from omegaconf import DictConfig, OmegaConf
-from rich import print as rprint
-from tqdm import tqdm
+from omegaconf import OmegaConf, DictConfig
+from rich.console import Console
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.core.seed import set_seed
+from src.core.device import get_device
+from src.core.config import load_config
+from src.core.trainer import Trainer
+from src.core.logger import create_logger
+from src.core.losses import create_criterion
 from src.core.callbacks import EarlyStopping, ModelCheckpoint
-from src.core.logger import MlflowLogger
+
+# Importing registers models and datasets
+from src.audio.models.factory import create_audio_model
+from src.audio.data.datamodule import create_audio_dataloaders
+
+console = Console()
 
 
-def create_model(cfg: DictConfig) -> nn.Module:
-    """Create model from configuration.
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Train road surface classification model",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    # Train with SimpleCNN
+    python scripts/train.py --config configs/audio/models/simple_cnn.yaml
+
+    # Train with ResNet18
+    python scripts/train.py --config configs/audio/models/resnet18_mel.yaml
+
+    # Override hyperparameters
+    python scripts/train.py --config configs/audio/models/simple_cnn.yaml \\
+        --override training.lr=0.0005 training.batch_size=64
+
+    # Local development (no MLflow)
+    python scripts/train.py --config configs/audio/models/simple_cnn.yaml \\
+        --logger file
+        """,
+    )
+
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=True,
+        help="Path to YAML config file",
+    )
+    parser.add_argument(
+        "--override",
+        nargs="*",
+        default=[],
+        help="Config overrides in dot notation (e.g. training.lr=0.001)",
+    )
+    parser.add_argument(
+        "--logger",
+        type=str,
+        choices=["mlflow", "file"],
+        default=None,
+        help="Override logger type (default: from config)",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Device: auto, cpu, cuda, mps (default: auto)",
+    )
+
+    return parser.parse_args()
+
+
+def apply_overrides(config: DictConfig, overrides: list[str]) -> DictConfig:
+    """Apply CLI overrides to config.
 
     Args:
-        cfg: Model configuration.
+        config: Base config.
+        overrides: List of "key=value" strings in dot notation.
 
     Returns:
-        PyTorch model.
+        Config with overrides applied.
     """
-    model_name = cfg.model.name
-    num_classes = cfg.model.num_classes
-    pretrained = cfg.model.pretrained
+    for override in overrides:
+        if "=" not in override:
+            console.print(f"[yellow]Skipping invalid override: {override}[/yellow]")
+            continue
 
-    rprint(f"[cyan]Creating model: {model_name} (classes={num_classes})")
+        key, value = override.split("=", 1)
 
-    # Simple ResNet-based classifier for audio spectrograms
-    if "resnet" in model_name.lower():
-        from torchvision import models
+        try:
+            value = int(value)
+        except ValueError:
+            try:
+                value = float(value)
+            except ValueError:
+                if value.lower() == "true":
+                    value = True
+                elif value.lower() == "false":
+                    value = False
 
-        if model_name == "resnet18":
-            backbone = models.resnet18(weights="IMAGENET1K_V1" if pretrained else None)
-        elif model_name == "resnet34":
-            backbone = models.resnet34(weights="IMAGENET1K_V1" if pretrained else None)
-        elif model_name == "resnet50":
-            backbone = models.resnet50(weights="IMAGENET1K_V1" if pretrained else None)
-        else:
-            raise ValueError(f"Unknown model: {model_name}")
+        OmegaConf.update(config, key, value, merge=True)
 
-        # Modify first layer for single-channel audio (spectrogram)
-        backbone.conv1 = nn.Conv2d(
-            1, 64, kernel_size=7, stride=2, padding=3, bias=False
+    return config
+
+
+def create_optimizer(model: torch.nn.Module, config: DictConfig) -> torch.optim.Optimizer:
+    """Create optimizer from config.
+
+    Args:
+        model: Model to optimize.
+        config: Training config section.
+
+    Returns:
+        Optimizer instance.
+    """
+    training_cfg = config.training
+    name = training_cfg.get("optimizer", "AdamW").lower()
+    lr = training_cfg.get("lr", training_cfg.get("learning_rate", 1e-4))
+    weight_decay = training_cfg.get("weight_decay", 0.01)
+
+    if name == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(), lr=lr, weight_decay=weight_decay,
         )
-
-        # Modify classifier for our number of classes
-        in_features = backbone.fc.in_features
-        backbone.fc = nn.Sequential(
-            nn.Dropout(cfg.model.dropout),
-            nn.Linear(in_features, num_classes),
+    elif name == "adam":
+        return torch.optim.Adam(
+            model.parameters(), lr=lr, weight_decay=weight_decay,
         )
-
-        return backbone
+    elif name == "sgd":
+        momentum = training_cfg.get("momentum", 0.9)
+        return torch.optim.SGD(
+            model.parameters(), lr=lr, weight_decay=weight_decay,
+            momentum=momentum,
+        )
     else:
-        raise ValueError(f"Unsupported model: {model_name}")
+        raise ValueError(f"Unknown optimizer: {name}")
 
 
-def train_epoch(
-    model: nn.Module,
-    dataloader: torch.utils.data.DataLoader,
-    criterion: nn.Module,
-    optimizer: torch.optim.Optimizer,
-    device: torch.device,
-    epoch: int,
-    log_every_n: int = 10,
-) -> float:
-    """Train for one epoch.
+def create_scheduler(
+    optimizer: torch.optim.Optimizer, config: DictConfig,
+) -> torch.optim.lr_scheduler.LRScheduler | None:
+    """Create LR scheduler from config.
 
     Args:
-        model: The model to train.
-        dataloader: Training data loader.
-        criterion: Loss function.
-        optimizer: Optimizer.
-        device: Device to train on.
-        epoch: Current epoch number.
-        log_every_n: Log metrics every n batches.
+        optimizer: Optimizer instance.
+        config: Training config section.
 
     Returns:
-        Average training loss.
+        Scheduler or None.
     """
-    model.train()
-    total_loss = 0.0
-    num_batches = len(dataloader)
+    training_cfg = config.training
+    name = training_cfg.get("scheduler", "cosine").lower()
+    epochs = training_cfg.get("epochs", 50)
 
-    pbar = tqdm(dataloader, desc=f"Epoch {epoch+1} [train]", leave=False)
-
-    for batch_idx, (inputs, targets) in enumerate(pbar):
-        inputs, targets = inputs.to(device), targets.to(device)
-
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-
-        # Gradient clipping
-        if hasattr(model, "grad_clip"):
-            torch.nn.utils.clip_grad_norm_(model.parameters(), model.grad_clip)
-
-        optimizer.step()
-
-        total_loss += loss.item()
-
-        if batch_idx % log_every_n == 0:
-            pbar.set_postfix({"loss": f"{loss.item():.4f}"})
-
-    return total_loss / num_batches
-
-
-def validate(
-    model: nn.Module,
-    dataloader: torch.utils.data.DataLoader,
-    criterion: nn.Module,
-    device: torch.device,
-) -> tuple[float, float]:
-    """Validate the model.
-
-    Args:
-        model: The model to validate.
-        dataloader: Validation data loader.
-        criterion: Loss function.
-        device: Device to validate on.
-
-    Returns:
-        Tuple of (average loss, accuracy).
-    """
-    model.eval()
-    total_loss = 0.0
-    correct = 0
-    total = 0
-
-    with torch.no_grad():
-        for inputs, targets in tqdm(dataloader, desc="[val]", leave=False):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-
-            total_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
-
-    avg_loss = total_loss / len(dataloader)
-    accuracy = 100.0 * correct / total
-
-    return avg_loss, accuracy
-
-
-@hydra.main(
-    version_base=None,
-    config_path="../configs",
-    config_name="train_config",
-)
-def main(cfg: DictConfig) -> None:
-    """Main training function.
-
-    Args:
-        cfg: Hydra configuration.
-    """
-    # Print configuration
-    rprint("\n[cyan bold]Configuration:[/cyan bold]")
-    rprint(OmegaConf.to_yaml(cfg))
-
-    # Setup device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    rprint(f"\n[cyan]Device:[/cyan] {device}")
-
-    # Create model
-    model = create_model(cfg)
-    model = model.to(device)
-
-    # Setup loss and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=cfg.training.learning_rate,
-        weight_decay=cfg.training.weight_decay,
-    )
-
-    # Learning rate scheduler
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=cfg.training.epochs,
-    )
-
-    # Create dummy dataloaders for demonstration
-    # Replace with your actual data loading logic
-    rprint("\n[cyan]Creating data loaders...[/cyan]")
-    # TODO: Replace with actual dataset
-    dummy_dataset = torch.utils.data.TensorDataset(
-        torch.randn(100, 1, 128, 64),  # batch, channel, mel, time
-        torch.randint(0, cfg.model.num_classes, (100,)),
-    )
-    train_loader = torch.utils.data.DataLoader(
-        dummy_dataset,
-        batch_size=cfg.training.batch_size,
-        shuffle=True,
-    )
-    val_loader = torch.utils.data.DataLoader(
-        dummy_dataset,
-        batch_size=cfg.training.batch_size,
-        shuffle=False,
-    )
-    rprint(f"  Train samples: {len(train_loader.dataset)}")
-    rprint(f"  Val samples: {len(val_loader.dataset)}")
-
-    # Initialize MLflow logger
-    rprint("\n[cyan]Initializing MLflow logger...[/cyan]")
-
-    # Setup early stopping and model checkpoint callbacks
-    early_stopping = EarlyStopping(
-        monitor="val/loss",
-        mode="min",
-        patience=cfg.training.patience,
-        min_delta=0.001,
-    )
-
-    checkpoint = ModelCheckpoint(
-        monitor="val/loss",
-        mode="min",
-        save_dir="checkpoints",
-        save_best_only=True,
-    )
-    checkpoint.set_model(model)
-
-    with MlflowLogger(
-        tracking_uri=cfg.mlflow.tracking_uri or None,
-        experiment_name=cfg.mlflow.experiment_name,
-        artifact_location=cfg.mlflow.artifact_location,
-        run_name=cfg.experiment_name,
-    ) as logger:
-        # Log hyperparameters
-        logger.log_params(
-            {
-                "model/name": cfg.model.name,
-                "model/num_classes": cfg.model.num_classes,
-                "training/epochs": cfg.training.epochs,
-                "training/batch_size": cfg.training.batch_size,
-                "training/learning_rate": cfg.training.learning_rate,
-                "training/weight_decay": cfg.training.weight_decay,
-            }
+    if name == "cosine":
+        return torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=epochs,
         )
+    elif name == "step":
+        step_size = training_cfg.get("step_size", 10)
+        gamma = training_cfg.get("gamma", 0.1)
+        return torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=step_size, gamma=gamma,
+        )
+    elif name == "none" or name == "":
+        return None
+    else:
+        raise ValueError(f"Unknown scheduler: {name}")
 
-        # Training loop
-        best_val_loss = float("inf")
 
-        for epoch in range(cfg.training.epochs):
-            # Train
-            train_loss = train_epoch(
-                model,
-                train_loader,
-                criterion,
-                optimizer,
-                device,
-                epoch,
-                log_every_n=cfg.mlflow.log_every_n_epochs,
-            )
+def create_callbacks(config: DictConfig) -> list:
+    """Create training callbacks from config.
 
-            # Validate
-            val_loss, val_acc = validate(
-                model,
-                val_loader,
-                criterion,
-                device,
-            )
+    Args:
+        config: Full config.
 
-            # Update scheduler
-            scheduler.step()
+    Returns:
+        List of TrainingCallback instances.
+    """
+    training_cfg = config.training
+    callbacks = []
 
-            # Log metrics
-            metrics = {
-                "train/loss": train_loss,
-                "val/loss": val_loss,
-                "val/accuracy": val_acc,
-                "training/lr": scheduler.get_last_lr()[0],
-            }
-            logger.log_metrics(metrics, step=epoch)
+    # Early stopping
+    patience = training_cfg.get(
+        "early_stopping_patience",
+        training_cfg.get("patience", 10),
+    )
+    monitor_es = config.get("checkpoint", {}).get("monitor", "val/balanced_accuracy")
+    mode_es = config.get("checkpoint", {}).get("mode", "max")
 
-            rprint(
-                f"Epoch {epoch+1}/{cfg.training.epochs}: "
-                f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
-                f"val_acc={val_acc:.2f}%"
-            )
+    if "loss" in monitor_es:
+        mode_es = "min"
 
-            # Early stopping check
-            epoch_metrics = {"val/loss": val_loss, "val/accuracy": val_acc}
-            early_stopping.on_epoch_end(logger, epoch, epoch_metrics)
+    callbacks.append(
+        EarlyStopping(
+            monitor=monitor_es,
+            mode=mode_es,
+            patience=patience,
+            min_delta=0.001,
+        )
+    )
 
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                checkpoint.save_best_model(epoch, val_loss)
+    # Model checkpoint
+    checkpoint_dir = config.get("checkpoint", {}).get(
+        "dir", config.get("checkpoint_dir", "checkpoints"),
+    )
+    save_top_k = config.get("checkpoint", {}).get("save_top_k", 3)
 
-                # Save best model to MLflow
-                if cfg.mlflow.log_model:
-                    logger.log_model(model, artifact_name="best_model")
+    callbacks.append(
+        ModelCheckpoint(
+            monitor=monitor_es,
+            mode=mode_es,
+            save_dir=checkpoint_dir,
+            save_top_k=save_top_k,
+        )
+    )
 
-            if early_stopping.should_stop():
-                rprint("\n[yellow]Early stopping triggered[/yellow]")
-                break
+    return callbacks
 
-        # Log final model
-        if cfg.mlflow.log_model:
-            logger.log_model(model, artifact_name="final_model")
 
-        rprint("\n[green bold]Training complete![/green bold]")
+def print_config_summary(config: DictConfig) -> None:
+    """Print config summary to console."""
+    console.print("\n[bold cyan]Configuration Summary[/bold cyan]")
+    console.print(f"  Experiment:  {config.get('experiment_name', 'unnamed')}")
+    console.print(f"  Model:       {config.model.name}")
+    console.print(f"  Classes:     {config.get('project', {}).get('num_classes', config.model.get('num_classes', '?'))}")
 
-    rprint("\n[cyan]Done![/cyan]")
+    training = config.training
+    console.print(f"  Epochs:      {training.get('epochs', '?')}")
+    console.print(f"  Batch size:  {training.get('batch_size', '?')}")
+    console.print(f"  LR:          {training.get('lr', training.get('learning_rate', '?'))}")
+    console.print(f"  Optimizer:   {training.get('optimizer', '?')}")
+    console.print(f"  Loss:        {training.get('loss', 'cross_entropy')}")
+    console.print(f"  Logger:      {config.get('logging', {}).get('tool', 'file')}")
+    console.print()
+
+
+def main() -> None:
+    """Main training entry point."""
+    args = parse_args()
+
+    console.print(f"\n[cyan]Loading config: {args.config}[/cyan]")
+    config = load_config(args.config)
+
+    if args.override:
+        config = apply_overrides(config, args.override)
+
+    if args.logger:
+        if "logging" not in config:
+            config.logging = {}
+        OmegaConf.update(config, "logging.tool", args.logger)
+
+    print_config_summary(config)
+
+    seed = config.get("project", config).get("seed", 42)
+    set_seed(seed)
+    console.print(f"[cyan]Seed: {seed}[/cyan]")
+
+    logger = create_logger(config)
+
+    try:
+        flat_config = OmegaConf.to_container(config, resolve=True)
+        logger.log_params(flat_config)
+    except Exception as e:
+        console.print(f"[yellow]Could not log params: {e}[/yellow]")
+
+    console.print("[cyan]Creating data loaders...[/cyan]")
+    try:
+        train_loader, val_loader = create_audio_dataloaders(config)
+        console.print(f"  Train: {len(train_loader.dataset)} samples")
+        console.print(f"  Val:   {len(val_loader.dataset)} samples")
+    except Exception as e:
+        console.print(f"[red]Error creating data loaders: {e}[/red]")
+        console.print("[yellow]Check that data exists (dvc pull) and CSV paths are correct[/yellow]")
+        logger.finish()
+        sys.exit(1)
+
+    console.print("[cyan]Creating model...[/cyan]")
+    model = create_audio_model(config)
+    num_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    console.print(f"  Total params:     {num_params:,}")
+    console.print(f"  Trainable params: {trainable_params:,}")
+
+    optimizer = create_optimizer(model, config)
+
+    scheduler = create_scheduler(optimizer, config)
+
+    criterion = create_criterion(config)
+
+    callbacks = create_callbacks(config)
+
+    class_names = config.get("project", {}).get("classes", None)
+    if class_names is None:
+        from src.audio.data.dataset import AudioMelDataset
+        class_names = AudioMelDataset.CLASS_NAMES
+
+    # Train
+    trainer = Trainer(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        optimizer=optimizer,
+        criterion=criterion,
+        config=config,
+        logger=logger,
+        scheduler=scheduler,
+        callbacks=callbacks,
+        class_names=class_names,
+    )
+
+    best_score = trainer.train()
+
+    # Log best model
+    try:
+        for cb in callbacks:
+            if isinstance(cb, ModelCheckpoint) and cb.best_checkpoint_path:
+                logger.log_artifact(cb.best_checkpoint_path)
+                console.print(
+                    f"\n[green]Best checkpoint: {cb.best_checkpoint_path}[/green]"
+                )
+    except Exception as e:
+        console.print(f"[yellow]Could not log model artifact: {e}[/yellow]")
+
+    logger.finish()
+
+    console.print(f"\n[bold green]Training complete. Best score: {best_score:.4f}[/bold green]")
 
 
 if __name__ == "__main__":
