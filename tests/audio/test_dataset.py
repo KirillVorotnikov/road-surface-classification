@@ -1,3 +1,5 @@
+"""Tests for AudioMelDataset."""
+
 import os
 import tempfile
 
@@ -12,14 +14,14 @@ from src.audio.data.dataset import AudioMelDataset
 
 @pytest.fixture
 def sample_dataset():
-    """Creates a temporary dataset with wav and CSV files."""
+    """Create a temporary dataset with wav files and CSV."""
     with tempfile.TemporaryDirectory() as tmpdir:
         clips_dir = os.path.join(tmpdir, "clips")
         os.makedirs(clips_dir)
 
         files = []
         labels = []
-        for i, label in enumerate(["dry_asphalt", "wet_asphalt", "snow"]):
+        for label in ["dry_asphalt", "wet_asphalt", "snow"]:
             for j in range(3):
                 filename = f"{label}_{j:03d}.wav"
                 filepath = os.path.join(clips_dir, filename)
@@ -28,7 +30,6 @@ def sample_dataset():
                 files.append(f"clips/{filename}")
                 labels.append(label)
 
-        # CSV
         csv_path = os.path.join(tmpdir, "data.csv")
         df = pd.DataFrame({"filepath": files, "label": labels})
         df.to_csv(csv_path, index=False)
@@ -37,13 +38,13 @@ def sample_dataset():
 
 
 class TestAudioMelDataset:
-    """AudioMelDataset Tests."""
+    """Tests for AudioMelDataset."""
 
     def test_len(self, sample_dataset):
-        """Dataset length = number of rows in CSV."""
+        """Dataset length matches CSV row count."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(csv_path=csv_path, audio_root=root)
-        assert len(dataset) == 9  # 3 classes × 3 files
+        assert len(dataset) == 9
 
     def test_getitem_shapes(self, sample_dataset):
         """__getitem__ returns (features, label) with correct shapes."""
@@ -64,7 +65,7 @@ class TestAudioMelDataset:
         assert features.shape[2] > 0
 
     def test_labels_are_valid(self, sample_dataset):
-        """All labels are valid indices."""
+        """All labels are valid class indices."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(csv_path=csv_path, audio_root=root)
 
@@ -72,8 +73,8 @@ class TestAudioMelDataset:
             _, label = dataset[i]
             assert 0 <= label < len(dataset.CLASS_NAMES)
 
-    def test_augmentation_none_for_val(self, sample_dataset):
-        """Without augmentations - the result is deterministic."""
+    def test_no_augmentation_deterministic(self, sample_dataset):
+        """Without augmentations, output is deterministic."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(
             csv_path=csv_path, audio_root=root,
@@ -86,8 +87,8 @@ class TestAudioMelDataset:
         assert torch.equal(f1, f2)
         assert l1 == l2
 
-    def test_augmentation_preset(self, sample_dataset):
-        """With augmentations - does not fall."""
+    def test_augmentation_does_not_crash(self, sample_dataset):
+        """Augmented dataset does not raise errors."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(
             csv_path=csv_path, audio_root=root,
@@ -98,7 +99,7 @@ class TestAudioMelDataset:
         assert features.dim() == 3
 
     def test_class_distribution(self, sample_dataset):
-        """get_class_distribution returns correct calculations."""
+        """get_class_distribution returns correct counts."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(csv_path=csv_path, audio_root=root)
 
@@ -108,7 +109,7 @@ class TestAudioMelDataset:
         assert dist["snow"] == 3
 
     def test_sample_weights_shape(self, sample_dataset):
-        """get_sample_weights returns a tensor of the desired length."""
+        """get_sample_weights returns tensor of correct length."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(csv_path=csv_path, audio_root=root)
 
@@ -117,7 +118,7 @@ class TestAudioMelDataset:
         assert weights.dtype == torch.float
 
     def test_unknown_label_raises(self):
-        """Unknown label in CSV -> error."""
+        """Unknown label in CSV raises ValueError."""
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = os.path.join(tmpdir, "bad.csv")
             pd.DataFrame({
@@ -129,7 +130,7 @@ class TestAudioMelDataset:
                 AudioMelDataset(csv_path=csv_path, audio_root=tmpdir)
 
     def test_missing_column_raises(self):
-        """Missing column in CSV → error."""
+        """Missing required column raises ValueError."""
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = os.path.join(tmpdir, "bad.csv")
             pd.DataFrame({
@@ -141,7 +142,7 @@ class TestAudioMelDataset:
                 AudioMelDataset(csv_path=csv_path, audio_root=tmpdir)
 
     def test_mfcc_mode(self, sample_dataset):
-        """MFCC mode is working."""
+        """MFCC mode produces correct feature dimension."""
         csv_path, root = sample_dataset
         dataset = AudioMelDataset(
             csv_path=csv_path, audio_root=root,

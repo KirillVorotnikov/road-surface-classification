@@ -1,3 +1,5 @@
+"""Tests for data splitting."""
+
 import os
 import tempfile
 
@@ -7,10 +9,10 @@ from src.audio.data.split import split_by_session
 
 
 class TestSplitBySession:
-    """split_by_session Tests."""
+    """Tests for split_by_session."""
 
     def test_split_with_session_column(self):
-        """Session breakdown."""
+        """Sessions do not overlap between splits."""
         with tempfile.TemporaryDirectory() as tmpdir:
             df = pd.DataFrame({
                 "filepath": [f"clip_{i}.wav" for i in range(20)],
@@ -21,29 +23,25 @@ class TestSplitBySession:
             df.to_csv(csv_path, index=False)
 
             train_path, val_path, test_path = split_by_session(
-                csv_path=csv_path,
-                output_dir=tmpdir,
-                val_size=0.2,
-                test_size=0.2,
+                csv_path=csv_path, output_dir=tmpdir,
+                val_size=0.2, test_size=0.2,
             )
 
             train = pd.read_csv(train_path)
             val = pd.read_csv(val_path)
             test = pd.read_csv(test_path)
 
-            # All data covered
             assert len(train) + len(val) + len(test) == 20
 
-            # Sessions don't overlap
-            train_sessions = set(train["session"])
-            val_sessions = set(val["session"])
-            test_sessions = set(test["session"])
-            assert train_sessions.isdisjoint(val_sessions)
-            assert train_sessions.isdisjoint(test_sessions)
-            assert val_sessions.isdisjoint(test_sessions)
+            train_s = set(train["session"])
+            val_s = set(val["session"])
+            test_s = set(test["session"])
+            assert train_s.isdisjoint(val_s)
+            assert train_s.isdisjoint(test_s)
+            assert val_s.isdisjoint(test_s)
 
-    def test_split_without_session_column(self):
-        """Fallback: Stratified split without sessions."""
+    def test_fallback_stratified(self):
+        """Without session column, uses stratified split."""
         with tempfile.TemporaryDirectory() as tmpdir:
             df = pd.DataFrame({
                 "filepath": [f"clip_{i}.wav" for i in range(30)],
@@ -53,8 +51,7 @@ class TestSplitBySession:
             df.to_csv(csv_path, index=False)
 
             train_path, val_path, test_path = split_by_session(
-                csv_path=csv_path,
-                output_dir=tmpdir,
+                csv_path=csv_path, output_dir=tmpdir,
             )
 
             train = pd.read_csv(train_path)
@@ -63,7 +60,7 @@ class TestSplitBySession:
 
             assert len(train) + len(val) + len(test) == 30
 
-    def test_output_files_exist(self):
+    def test_output_files_created(self):
         """train.csv, val.csv, test.csv are created."""
         with tempfile.TemporaryDirectory() as tmpdir:
             df = pd.DataFrame({

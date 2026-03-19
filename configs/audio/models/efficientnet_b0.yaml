@@ -1,0 +1,44 @@
+# EfficientNet-B0 (timm) for audio spectrograms
+
+defaults:
+  - /base
+
+experiment_name: audio-efficientnet-b0
+tags: [audio, efficientnet, pretrained, timm]
+modality: audio
+
+model:
+  name: audio_pretrained_cnn
+  num_classes: 5
+  params:
+    backbone: efficientnet_b0
+    pretrained: true
+    in_channels: 1
+    dropout: 0.3
+    head_hidden_dim: 256
+
+data:
+  name: audio_mel_dataset
+  augmentations: medium
+  params:
+    train_csv: data/processed/train.csv
+    val_csv: data/processed/val.csv
+    audio_root: data/processed
+    sample_rate: 16000
+    n_mels: 128
+    n_fft: 2048
+    hop_length: 512
+    duration_sec: 5.0
+
+training:
+  optimizer: AdamW
+  lr: 0.0001
+  weight_decay: 0.01
+  epochs: 50
+  batch_size: 32
+  scheduler: cosine
+  warmup_epochs: 3
+  early_stopping_patience: 10
+  loss: cross_entropy
+  label_smoothing: 0.1
+  num_workers: 4
