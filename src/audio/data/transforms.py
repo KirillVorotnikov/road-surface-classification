@@ -6,18 +6,17 @@
 2. Spectrogram-аугментации (SpecAugment)
 """
 
+from typing import Literal
+
 import numpy as np
-import torch
-from typing import Optional, Literal, Union
-from audiomentations import Compose as AudiomentationCompose
 from audiomentations import (
     AddGaussianNoise,
-    TimeStretch,
+    Gain,
     PitchShift,
     Shift,
-    Gain,
+    TimeStretch,
 )
-
+from audiomentations import Compose as AudiomentationCompose
 
 PresetType = Literal["light", "medium", "heavy"]
 
@@ -25,10 +24,10 @@ PresetType = Literal["light", "medium", "heavy"]
 class WaveformAugmentations:
     """
     Аугментации на уровне waveform с использованием библиотеки audiomentations.
-    
+
     Применяются к сырому аудио-сигналу перед конвертацией в спектрограмму.
     """
-    
+
     def __init__(
         self,
         preset: PresetType = "light",
@@ -37,7 +36,7 @@ class WaveformAugmentations:
     ):
         """
         Инициализация waveform аугментаций.
-        
+
         Args:
             preset: Уровень аугментации ("light", "medium", "heavy")
             sample_rate: Частота дискретизации аудио
@@ -46,14 +45,14 @@ class WaveformAugmentations:
         self.preset = preset
         self.sample_rate = sample_rate
         self.p = p
-        
+
         self.transform = self._build_transform(preset, sample_rate, p)
-    
+
     def _build_transform(
         self, preset: PresetType, sample_rate: int, p: float
     ) -> AudiomentationCompose:
         """Построение цепочки аугментаций в зависимости от пресета."""
-        
+
         # Параметры для разных пресетов
         params = {
             "light": {
@@ -87,9 +86,9 @@ class WaveformAugmentations:
                 "gain_max": 10,
             },
         }
-        
+
         cfg = params[preset]
-        
+
         return AudiomentationCompose(
             [
                 AddGaussianNoise(
@@ -120,14 +119,14 @@ class WaveformAugmentations:
                 ),
             ]
         )
-    
+
     def __call__(self, waveform: np.ndarray) -> np.ndarray:
         """
         Применение аугментаций к waveform.
-        
+
         Args:
             waveform: Аудио-сигнал в формате numpy array (mono, float32, [-1, 1])
-            
+
         Returns:
             Аугментированный аудио-сигнал
         """
@@ -137,10 +136,10 @@ class WaveformAugmentations:
 class SpecAugment:
     """
     SpecAugment - аугментации на уровне спектрограммы.
-    
+
     Применяется к mel-спектрограмме или MFCC после логарифмической компрессии.
     """
-    
+
     def __init__(
         self,
         preset: PresetType = "light",
@@ -152,7 +151,7 @@ class SpecAugment:
     ):
         """
         Инициализация SpecAugment.
-        
+
         Args:
             preset: Уровень аугментации ("light", "medium", "heavy")
             n_freq_masks: Количество масок по частоте
@@ -167,7 +166,7 @@ class SpecAugment:
         self.freq_mask_width = freq_mask_width
         self.time_mask_width = time_mask_width
         self.p = p
-        
+
         # Переопределяем параметры для пресетов
         if preset == "light":
             self.n_freq_masks = 1
@@ -184,95 +183,91 @@ class SpecAugment:
             self.n_time_masks = 3
             self.freq_mask_width = 30
             self.time_mask_width = 60
-    
-    def _frequency_mask(
-        self, spectrogram: np.ndarray, mask_width: int
-    ) -> np.ndarray:
+
+    def _frequency_mask(self, spectrogram: np.ndarray, mask_width: int) -> np.ndarray:
         """
         Применение маски по частоте.
-        
+
         Args:
             spectrogram: Спектрограмма (n_freqs, n_time)
             mask_width: Ширина маски
-            
+
         Returns:
             Замаскированная спектрограмма
         """
         n_freqs = spectrogram.shape[0]
         if mask_width >= n_freqs:
             return spectrogram
-        
+
         # Случайная позиция маски
         start = np.random.randint(0, n_freqs - mask_width)
-        
+
         # Заполняем средним значением по частоте
-        mask_value = spectrogram[start:start + mask_width, :].mean()
-        spectrogram[start:start + mask_width, :] = mask_value
-        
+        mask_value = spectrogram[start : start + mask_width, :].mean()
+        spectrogram[start : start + mask_width, :] = mask_value
+
         return spectrogram
-    
-    def _time_mask(
-        self, spectrogram: np.ndarray, mask_width: int
-    ) -> np.ndarray:
+
+    def _time_mask(self, spectrogram: np.ndarray, mask_width: int) -> np.ndarray:
         """
         Применение маски по времени.
-        
+
         Args:
             spectrogram: Спектрограмма (n_freqs, n_time)
             mask_width: Ширина маски
-            
+
         Returns:
             Замаскированная спектрограмма
         """
         n_time = spectrogram.shape[1]
         if mask_width >= n_time:
             return spectrogram
-        
+
         # Случайная позиция маски
         start = np.random.randint(0, n_time - mask_width)
-        
+
         # Заполняем средним значением по времени
-        mask_value = spectrogram[:, start:start + mask_width].mean()
-        spectrogram[:, start:start + mask_width] = mask_value
-        
+        mask_value = spectrogram[:, start : start + mask_width].mean()
+        spectrogram[:, start : start + mask_width] = mask_value
+
         return spectrogram
-    
+
     def __call__(self, spectrogram: np.ndarray) -> np.ndarray:
         """
         Применение SpecAugment к спектрограмме.
-        
+
         Args:
             spectrogram: Спектрограмма в формате numpy array (n_freqs, n_time)
-            
+
         Returns:
             Замаскированная спектрограмма
         """
         spectrogram = spectrogram.copy()
-        
+
         # Применяем маски по частоте
         if np.random.random() < self.p:
             for _ in range(self.n_freq_masks):
                 mask_width = np.random.randint(0, self.freq_mask_width + 1)
                 if mask_width > 0:
                     spectrogram = self._frequency_mask(spectrogram, mask_width)
-        
+
         # Применяем маски по времени
         if np.random.random() < self.p:
             for _ in range(self.n_time_masks):
                 mask_width = np.random.randint(0, self.time_mask_width + 1)
                 if mask_width > 0:
                     spectrogram = self._time_mask(spectrogram, mask_width)
-        
+
         return spectrogram
 
 
 class AudioAugmentations:
     """
     Комбинированный класс для аугментации аудио-данных.
-    
+
     Применяет waveform и spectrogram аугментации последовательно.
     """
-    
+
     def __init__(
         self,
         preset: PresetType = "light",
@@ -284,7 +279,7 @@ class AudioAugmentations:
     ):
         """
         Инициализация комбинированных аугментаций.
-        
+
         Args:
             preset: Уровень аугментации ("light", "medium", "heavy")
             sample_rate: Частота дискретизации
@@ -297,54 +292,54 @@ class AudioAugmentations:
         self.sample_rate = sample_rate
         self.use_waveform = use_waveform
         self.use_spec = use_spec
-        
+
         if use_waveform:
             self.waveform_aug = WaveformAugmentations(
                 preset=preset, sample_rate=sample_rate, p=waveform_p
             )
         else:
             self.waveform_aug = None
-        
+
         if use_spec:
             self.spec_aug = SpecAugment(preset=preset, p=spec_p)
         else:
             self.spec_aug = None
-    
+
     def augment_waveform(self, waveform: np.ndarray) -> np.ndarray:
         """Применить waveform аугментации."""
         if self.waveform_aug is None:
             return waveform
         return self.waveform_aug(waveform)
-    
+
     def augment_spectrogram(self, spectrogram: np.ndarray) -> np.ndarray:
         """Применить spectrogram аугментации."""
         if self.spec_aug is None:
             return spectrogram
         return self.spec_aug(spectrogram)
-    
+
     def __call__(
-        self, 
-        waveform: Optional[np.ndarray] = None,
-        spectrogram: Optional[np.ndarray] = None,
-    ) -> Union[np.ndarray, tuple]:
+        self,
+        waveform: np.ndarray | None = None,
+        spectrogram: np.ndarray | None = None,
+    ) -> np.ndarray | tuple:
         """
         Применение аугментаций.
-        
+
         Args:
             waveform: Сырой аудио-сигнал (для waveform аугментаций)
             spectrogram: Спектрограмма (для spectrogram аугментаций)
-            
+
         Returns:
             Аугментированный waveform и/или spectrogram
         """
         result = []
-        
+
         if waveform is not None:
             result.append(self.augment_waveform(waveform))
-        
+
         if spectrogram is not None:
             result.append(self.augment_spectrogram(spectrogram))
-        
+
         if len(result) == 1:
             return result[0]
         return tuple(result)

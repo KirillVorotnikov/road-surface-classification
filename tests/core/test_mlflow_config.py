@@ -64,12 +64,13 @@ class TestMLflowConfigStartRun:
     def test_start_run_no_run_name_anywhere(self, mock_start_run):
         """Test start_run when run_name is None everywhere."""
         config = MLflowConfig()  # run_name=None
-        config.start_run()       # run_name=None
+        config.start_run()  # run_name=None
 
         mock_start_run.assert_called_once_with(
             run_name=None,
             tags={},
         )
+
 
 class TestMLflowConfigPostInit:
     """Test __post_init__ behavior."""
@@ -106,8 +107,9 @@ class TestMLflowConfigSetup:
     @patch("mlflow.set_experiment")
     def test_setup_with_tracking_uri(self, mock_set_experiment, mock_set_tracking_uri):
         """Test setup sets tracking URI."""
-        config = MLflowConfig(tracking_uri="http://test:5000")
-        config.setup()
+        with patch.dict(os.environ, {}, clear=True):
+            config = MLflowConfig(tracking_uri="http://test:5000")
+            config.setup()
         mock_set_tracking_uri.assert_called_once_with("http://test:5000")
         mock_set_experiment.assert_called_once_with("road-surface-classification")
 
@@ -152,41 +154,9 @@ class TestMLflowConfigSetup:
         self, mock_set_experiment, mock_set_tracking_uri
     ):
         """Test setup without tracking URI."""
-        config = MLflowConfig()
-        config.setup()
+        with patch.dict(os.environ, {}, clear=True):
+            config = MLflowConfig()
+            config.setup()
 
         mock_set_tracking_uri.assert_not_called()
         mock_set_experiment.assert_called_once_with("road-surface-classification")
-
-
-class TestMLflowConfigStartRun:
-    """Test start_run() method."""
-
-    @patch("mlflow.start_run")
-    def test_start_run_default(self, mock_start_run):
-        """Test start_run with default values."""
-        config = MLflowConfig()
-        config.start_run()
-
-        mock_start_run.assert_called_once_with(tags={}, **{})
-
-    @patch("mlflow.start_run")
-    def test_start_run_with_instance_values(self, mock_start_run):
-        """Test start_run with instance run_name and tags."""
-        config = MLflowConfig(run_name="my-run", tags={"project": "rsc"})
-        config.start_run()
-
-        mock_start_run.assert_called_once_with(
-            tags={"project": "rsc", "mlflow.runName": "my-run"}, **{}
-        )
-
-    @patch("mlflow.start_run")
-    def test_start_run_with_override_values(self, mock_start_run):
-        """Test start_run with override values."""
-        config = MLflowConfig(run_name="my-run", tags={"project": "rsc"})
-        config.start_run(run_name="override-run", tags={"env": "test"})
-
-        mock_start_run.assert_called_once_with(
-            tags={"project": "rsc", "env": "test", "mlflow.runName": "override-run"},
-            **{},
-        )

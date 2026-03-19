@@ -15,8 +15,8 @@ Usage:
         --input data/test_clips/
 """
 
-import sys
 import argparse
+import sys
 from pathlib import Path
 
 import torch
@@ -26,11 +26,11 @@ from rich.table import Table
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.audio.data.dataset import AudioMelDataset
+from src.audio.data.preprocessing import AudioPreprocessor
+from src.audio.models.factory import create_audio_model
 from src.core.config import load_config
 from src.core.device import get_device
-from src.audio.models.factory import create_audio_model
-from src.audio.data.preprocessing import AudioPreprocessor
-from src.audio.data.dataset import AudioMelDataset
 
 console = Console()
 
@@ -39,7 +39,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run inference on audio files")
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--config", type=str, required=True)
-    parser.add_argument("--input", type=str, required=True, help="Audio file or directory")
+    parser.add_argument(
+        "--input", type=str, required=True, help="Audio file or directory"
+    )
     parser.add_argument("--device", type=str, default="auto")
     return parser.parse_args()
 
@@ -71,9 +73,9 @@ def main() -> None:
     input_path = Path(args.input)
     if input_path.is_dir():
         audio_files = sorted(
-            list(input_path.glob("*.wav")) +
-            list(input_path.glob("*.mp3")) +
-            list(input_path.glob("*.flac"))
+            list(input_path.glob("*.wav"))
+            + list(input_path.glob("*.mp3"))
+            + list(input_path.glob("*.flac"))
         )
     else:
         audio_files = [input_path]
@@ -95,7 +97,9 @@ def main() -> None:
         for audio_file in audio_files:
             try:
                 features = preprocessor(audio_file)
-                features = features.unsqueeze(0).unsqueeze(0).to(device)  # (1, 1, n_mels, T)
+                features = (
+                    features.unsqueeze(0).unsqueeze(0).to(device)
+                )  # (1, 1, n_mels, T)
 
                 outputs = model(features)
                 probs = torch.softmax(outputs, dim=-1).squeeze()

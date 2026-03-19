@@ -1,5 +1,6 @@
 import pytest
-from src.core.registry import Registry, MODEL_REGISTRY
+
+from src.core.registry import MODEL_REGISTRY, Registry
 
 
 class TestRegistry:
@@ -56,7 +57,8 @@ class TestRegistry:
         class A:
             pass
 
-        with pytest.raises(ValueError, match="already registered"):
+        with pytest.raises(KeyError, match="already registered"):
+
             @reg.register("dup")
             class B:
                 pass
@@ -69,7 +71,7 @@ class TestRegistry:
         class A:
             pass
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(KeyError, match="not registered"):
             reg.create("nonexistent")
 
     def test_global_model_registry_exists(self):

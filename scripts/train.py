@@ -16,29 +16,28 @@ Usage:
         --logger file
 """
 
-import sys
 import argparse
+import sys
 from pathlib import Path
 
 import torch
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig, OmegaConf
 from rich.console import Console
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.core.seed import set_seed
-from src.core.device import get_device
-from src.core.config import load_config
-from src.core.trainer import Trainer
-from src.core.logger import create_logger
-from src.core.losses import create_criterion
-from src.core.callbacks import EarlyStopping, ModelCheckpoint
+from src.audio.data.datamodule import create_audio_dataloaders
 
 # Importing registers models and datasets
 from src.audio.models.factory import create_audio_model
-from src.audio.data.datamodule import create_audio_dataloaders
+from src.core.callbacks import EarlyStopping, ModelCheckpoint
+from src.core.config import load_config
+from src.core.logger import create_logger
+from src.core.losses import create_criterion
+from src.core.seed import set_seed
+from src.core.trainer import Trainer
 
 console = Console()
 
@@ -128,7 +127,9 @@ def apply_overrides(config: DictConfig, overrides: list[str]) -> DictConfig:
     return config
 
 
-def create_optimizer(model: torch.nn.Module, config: DictConfig) -> torch.optim.Optimizer:
+def create_optimizer(
+    model: torch.nn.Module, config: DictConfig
+) -> torch.optim.Optimizer:
     """Create optimizer from config.
 
     Args:
@@ -145,16 +146,22 @@ def create_optimizer(model: torch.nn.Module, config: DictConfig) -> torch.optim.
 
     if name == "adamw":
         return torch.optim.AdamW(
-            model.parameters(), lr=lr, weight_decay=weight_decay,
+            model.parameters(),
+            lr=lr,
+            weight_decay=weight_decay,
         )
     elif name == "adam":
         return torch.optim.Adam(
-            model.parameters(), lr=lr, weight_decay=weight_decay,
+            model.parameters(),
+            lr=lr,
+            weight_decay=weight_decay,
         )
     elif name == "sgd":
         momentum = training_cfg.get("momentum", 0.9)
         return torch.optim.SGD(
-            model.parameters(), lr=lr, weight_decay=weight_decay,
+            model.parameters(),
+            lr=lr,
+            weight_decay=weight_decay,
             momentum=momentum,
         )
     else:
@@ -162,7 +169,8 @@ def create_optimizer(model: torch.nn.Module, config: DictConfig) -> torch.optim.
 
 
 def create_scheduler(
-    optimizer: torch.optim.Optimizer, config: DictConfig,
+    optimizer: torch.optim.Optimizer,
+    config: DictConfig,
 ) -> torch.optim.lr_scheduler.LRScheduler | None:
     """Create LR scheduler from config.
 
@@ -179,13 +187,16 @@ def create_scheduler(
 
     if name == "cosine":
         return torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=epochs,
+            optimizer,
+            T_max=epochs,
         )
     elif name == "step":
         step_size = training_cfg.get("step_size", 10)
         gamma = training_cfg.get("gamma", 0.1)
         return torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=step_size, gamma=gamma,
+            optimizer,
+            step_size=step_size,
+            gamma=gamma,
         )
     elif name == "none" or name == "":
         return None
@@ -227,7 +238,8 @@ def create_callbacks(config: DictConfig) -> list:
 
     # Model checkpoint
     checkpoint_dir = config.get("checkpoint", {}).get(
-        "dir", config.get("checkpoint_dir", "checkpoints"),
+        "dir",
+        config.get("checkpoint_dir", "checkpoints"),
     )
     save_top_k = config.get("checkpoint", {}).get("save_top_k", 3)
 
@@ -248,12 +260,16 @@ def print_config_summary(config: DictConfig) -> None:
     console.print("\n[bold cyan]Configuration Summary[/bold cyan]")
     console.print(f"  Experiment:  {config.get('experiment_name', 'unnamed')}")
     console.print(f"  Model:       {config.model.name}")
-    console.print(f"  Classes:     {config.get('project', {}).get('num_classes', config.model.get('num_classes', '?'))}")
+    console.print(
+        f"  Classes:     {config.get('project', {}).get('num_classes', config.model.get('num_classes', '?'))}"
+    )
 
     training = config.training
     console.print(f"  Epochs:      {training.get('epochs', '?')}")
     console.print(f"  Batch size:  {training.get('batch_size', '?')}")
-    console.print(f"  LR:          {training.get('lr', training.get('learning_rate', '?'))}")
+    console.print(
+        f"  LR:          {training.get('lr', training.get('learning_rate', '?'))}"
+    )
     console.print(f"  Optimizer:   {training.get('optimizer', '?')}")
     console.print(f"  Loss:        {training.get('loss', 'cross_entropy')}")
     console.print(f"  Logger:      {config.get('logging', {}).get('tool', 'file')}")
@@ -296,7 +312,9 @@ def main() -> None:
         console.print(f"  Val:   {len(val_loader.dataset)} samples")
     except Exception as e:
         console.print(f"[red]Error creating data loaders: {e}[/red]")
-        console.print("[yellow]Check that data exists (dvc pull) and CSV paths are correct[/yellow]")
+        console.print(
+            "[yellow]Check that data exists (dvc pull) and CSV paths are correct[/yellow]"
+        )
         logger.finish()
         sys.exit(1)
 
@@ -318,6 +336,7 @@ def main() -> None:
     class_names = config.get("project", {}).get("classes", None)
     if class_names is None:
         from src.audio.data.dataset import AudioMelDataset
+
         class_names = AudioMelDataset.CLASS_NAMES
 
     # Train
@@ -349,7 +368,9 @@ def main() -> None:
 
     logger.finish()
 
-    console.print(f"\n[bold green]Training complete. Best score: {best_score:.4f}[/bold green]")
+    console.print(
+        f"\n[bold green]Training complete. Best score: {best_score:.4f}[/bold green]"
+    )
 
 
 if __name__ == "__main__":

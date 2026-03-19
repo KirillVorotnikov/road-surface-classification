@@ -5,11 +5,12 @@ treated as single-channel images. timm handles in_chans
 adaptation automatically.
 """
 
+import timm
 import torch
 import torch.nn as nn
-import timm
 
 from src.core.registry import MODEL_REGISTRY
+
 from .heads import MLPHead
 
 
@@ -51,7 +52,12 @@ class AudioPretrainedClassifier(nn.Module):
             in_chans=in_channels,
         )
 
-        feature_dim = self.backbone.num_features
+        # Determine feature dimension by passing a dummy tensor
+        # This handles cases where feature dim depends on input size
+        dummy_input = torch.randn(1, in_channels, 64, 44)
+        with torch.no_grad():
+            dummy_features = self.backbone(dummy_input)
+        feature_dim = dummy_features.shape[1]
 
         self.head = MLPHead(
             in_features=feature_dim,
@@ -110,8 +116,12 @@ class AudioResNetClassifier(nn.Module):
 
         # Adapt first conv for single-channel input
         self.backbone.conv1 = nn.Conv2d(
-            in_channels, 64,
-            kernel_size=7, stride=2, padding=3, bias=False,
+            in_channels,
+            64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False,
         )
 
         # Replace classifier

@@ -1,4 +1,4 @@
-from src.core.metrics import compute_metrics, compute_confusion_matrix
+from src.core.metrics import compute_confusion_matrix, compute_metrics
 
 
 class TestComputeMetrics:
@@ -54,8 +54,11 @@ class TestComputeMetrics:
         m = compute_metrics([0, 1], [0, 1], ["a", "b"])
 
         expected_keys = {
-            "accuracy", "balanced_accuracy",
-            "f1_macro", "f1_weighted", "f1_per_class",
+            "accuracy",
+            "balanced_accuracy",
+            "f1_macro",
+            "f1_weighted",
+            "f1_per_class",
         }
         assert expected_keys == set(m.keys())
 

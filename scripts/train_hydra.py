@@ -20,13 +20,12 @@ from rich.console import Console
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.audio.data.datamodule import create_audio_dataloaders
+from src.audio.models.factory import create_audio_model
+from src.core.callbacks import EarlyStopping, ModelCheckpoint
+from src.core.logger import MlflowLogger
 from src.core.seed import set_seed
 from src.core.trainer import Trainer
-from src.core.logger import create_logger, MlflowLogger
-from src.core.losses import create_criterion
-from src.core.callbacks import EarlyStopping, ModelCheckpoint
-from src.audio.models.factory import create_audio_model
-from src.audio.data.datamodule import create_audio_dataloaders
 
 console = Console()
 
@@ -56,6 +55,7 @@ def main(cfg: DictConfig) -> None:
         )
     else:
         from src.core.logger import FileLogger
+
         logger = FileLogger(run_name=cfg.experiment_name)
 
     try:
@@ -87,7 +87,8 @@ def main(cfg: DictConfig) -> None:
     )
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=cfg.training.epochs,
+        optimizer,
+        T_max=cfg.training.epochs,
     )
 
     criterion = torch.nn.CrossEntropyLoss()
@@ -111,6 +112,7 @@ def main(cfg: DictConfig) -> None:
 
     if not OmegaConf.select(cfg, "project.classes", default=None):
         from src.audio.data.dataset import AudioMelDataset
+
         OmegaConf.update(cfg, "project.classes", AudioMelDataset.CLASS_NAMES)
 
     trainer = Trainer(

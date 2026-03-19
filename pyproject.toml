@@ -65,6 +65,18 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+ignore = [
+    "E402",  # Module level import not at top of file (false positive after sys.path.insert)
+    "E501",  # Line too long (allowed in docstrings, comments, arg parsers)
+    "N812",  # Lowercase `functional` imported as non-lowercase `F` (PyTorch convention)
+    "UP038",  # Use `X | Y` in isinstance call (prefer tuple syntax for readability)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Blank lines with whitespace in docstrings (common in Russian docstrings)
+"src/**/*.py" = ["W293"]
+"tests/**/*.py" = ["W293"]
+"scripts/**/*.py" = ["W293"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

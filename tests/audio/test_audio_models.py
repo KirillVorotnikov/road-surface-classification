@@ -4,12 +4,11 @@ import pytest
 import torch
 import torch.nn as nn
 
-from src.audio.models.simple_cnn import AudioSimpleCNN
 from src.audio.models.classifier import AudioPretrainedClassifier, AudioResNetClassifier
-from src.audio.models.heads import LinearHead, MLPHead
 from src.audio.models.factory import create_audio_model
+from src.audio.models.heads import LinearHead, MLPHead
+from src.audio.models.simple_cnn import AudioSimpleCNN
 from src.core.registry import MODEL_REGISTRY
-
 
 
 @pytest.fixture
@@ -22,7 +21,6 @@ def mel_batch():
 def small_mel_batch():
     """Smaller batch for faster pretrained model tests."""
     return torch.randn(2, 1, 64, 44)
-
 
 
 class TestHeads:
@@ -45,7 +43,6 @@ class TestHeads:
         x = torch.randn(2, 256)
         out = head(x)
         assert out.shape == (2, 3)
-
 
 
 class TestSimpleCNN:
@@ -94,7 +91,6 @@ class TestSimpleCNN:
                 assert param.grad is not None, f"No gradient for {name}"
 
 
-
 class TestPretrainedClassifier:
     """Tests for AudioPretrainedClassifier (timm)."""
 
@@ -138,7 +134,6 @@ class TestPretrainedClassifier:
         )
         out = model(small_mel_batch)
         assert out.shape == (2, 5)
-
 
 
 class TestResNetClassifier:
@@ -186,7 +181,6 @@ class TestResNetClassifier:
         assert features.shape[0] == 2
 
 
-
 class TestModelRegistry:
     """Tests for model registration."""
 
@@ -211,62 +205,72 @@ class TestModelRegistry:
         assert out.shape == (2, 5)
 
 
-
 class TestFactory:
     """Tests for create_audio_model factory."""
 
     def test_create_by_registry_key(self):
         from omegaconf import OmegaConf
-        config = OmegaConf.create({
-            "model": {
-                "name": "audio_simple_cnn",
-                "num_classes": 5,
-                "params": {"in_channels": 1, "dropout": 0.2},
-            },
-        })
+
+        config = OmegaConf.create(
+            {
+                "model": {
+                    "name": "audio_simple_cnn",
+                    "num_classes": 5,
+                    "params": {"in_channels": 1, "dropout": 0.2},
+                },
+            }
+        )
         model = create_audio_model(config)
         assert isinstance(model, AudioSimpleCNN)
 
     def test_create_resnet_by_short_name(self):
         from omegaconf import OmegaConf
-        config = OmegaConf.create({
-            "model": {
-                "name": "resnet18",
-                "num_classes": 5,
-                "pretrained": False,
-                "dropout": 0.2,
-            },
-        })
+
+        config = OmegaConf.create(
+            {
+                "model": {
+                    "name": "resnet18",
+                    "num_classes": 5,
+                    "pretrained": False,
+                    "dropout": 0.2,
+                },
+            }
+        )
         model = create_audio_model(config)
         assert isinstance(model, AudioResNetClassifier)
 
     def test_create_timm_model_by_name(self):
         from omegaconf import OmegaConf
-        config = OmegaConf.create({
-            "model": {
-                "name": "mobilenetv3_small_100",
-                "num_classes": 5,
-                "pretrained": False,
-                "dropout": 0.2,
-            },
-        })
+
+        config = OmegaConf.create(
+            {
+                "model": {
+                    "name": "mobilenetv3_small_100",
+                    "num_classes": 5,
+                    "pretrained": False,
+                    "dropout": 0.2,
+                },
+            }
+        )
         model = create_audio_model(config)
         assert isinstance(model, AudioPretrainedClassifier)
 
     def test_factory_output_shape(self):
         from omegaconf import OmegaConf
-        config = OmegaConf.create({
-            "model": {
-                "name": "audio_simple_cnn",
-                "num_classes": 3,
-                "params": {},
-            },
-        })
+
+        config = OmegaConf.create(
+            {
+                "model": {
+                    "name": "audio_simple_cnn",
+                    "num_classes": 3,
+                    "params": {},
+                },
+            }
+        )
         model = create_audio_model(config)
         x = torch.randn(2, 1, 128, 87)
         out = model(x)
         assert out.shape == (2, 3)
-
 
 
 class TestModelSize:
@@ -279,7 +283,9 @@ class TestModelSize:
 
     def test_resnet18_params(self):
         model = AudioResNetClassifier(
-            backbone="resnet18", num_classes=5, pretrained=False,
+            backbone="resnet18",
+            num_classes=5,
+            pretrained=False,
         )
         params = sum(p.numel() for p in model.parameters())
         assert params < 15_000_000
